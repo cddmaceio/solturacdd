@@ -158,7 +158,7 @@ html,body{background:#f3f6fa;color:var(--text)}
           <select id="laneFilter" class="filter-select"><option value="ALL">Todas as salas</option><option>ELITE</option><option>FORÇA</option><option>AS</option><option>SPOT</option><option>OUTROS</option></select>
           <select id="statusFilter" class="filter-select"><option value="ALL">Todos os status</option><option value="DIVERGENT">Com troca</option><option value="FIDELIZED">Fidelizados</option><option value="PENDING">Veículo com carga e sem motorista</option></select>
           <select id="availabilityFilter" class="filter-select" title="Filtrar pela coluna DISP da Base Fidelização"><option value="ALL">Disponibilidade: Todos</option><option value="AVAILABLE">Disponíveis</option><option value="UNAVAILABLE">Indisponíveis</option></select>
-          <span class="pcd-only-note">Ordem: VAN → VULCK → TRUCK → SIDER → SPOT com mapa D0 aberto</span>
+          <span class="pcd-only-note">Ordem: VAN → VULCK → TRUCK → SIDER · Freteiro/SPOT não entra na escala</span>
           <span class="spacer"></span><span class="autosave" id="saveStatus">Salvo localmente</span>
           <button class="btn danger" onclick="resetDay()">↺ Limpar ajustes</button>
         </div>
@@ -263,7 +263,13 @@ function mpdPhaseClass(r){
   if(n.includes('SAIDA')||n.includes('PORTARIA'))return 'mpd-saida';
   return 'mpd-open';
 }
-function pcdRowsForScale(){return app.data.pcdRows.filter(r=>(r.date===app.date||isPriorOpenMap(r,app.date))&&!isGenericPlate(r.plate))}
+function pcdRowsForScale(){
+  // A Escala do Dia é composta somente pela frota fixa cadastrada na Base Fidelização.
+  // REC/placas genéricas ficam visíveis no PCD, mas não criam linha de escala.
+  // Freteiro é classificado como SPOT no PCD e também não entra na Escala do Dia.
+  const fixed=basePlateSet();
+  return app.data.pcdRows.filter(r=>(r.date===app.date||isPriorOpenMap(r,app.date))&&!isGenericPlate(r.plate)&&!isFreteiroMap(r)&&fixed.has(norm(r.plate)))
+}
 function normalizedVehicleType(value){
   let n=norm(value);
   if(n.includes('VAN'))return 'VAN';
@@ -352,6 +358,8 @@ function normalizeOperationalAssignments(){
 function legacyForDate(){return app.data.legacyScales?.[app.date]||{}}
 function laneFromBase(base){let r=String(base?.room||'').trim();return r?r.toUpperCase():'OUTROS'}
 function isGenericPlate(p){let n=norm(p);return !n||n==='VUC0001'||n==='SEM PLACA'||n==='SPOT'||/^REC\d+$/.test(n)}
+function isFreteiroMap(r){return norm(r?.load)==='FRETEIRO'}
+function isRecMap(r){return /^REC\d+$/.test(norm(r?.plate))||norm(r?.currentLoad).includes('RECARGA')}
 function buildVehicles(){
   const hasLiveDate=app.data.pcdRows.some(r=>r.date===app.date);
   const historical=!hasLiveDate?loadHistorySnapshot(app.date):null;
@@ -433,19 +441,22 @@ function renderModal(){if(!app.modal)return;let role=app.modal.role,q=norm($('#m
 function clearSlot(key,role){let field=role==='driver'?'driverCode':'helperCode';app.scale[key][field]='';persistScale(false);closeModal();renderAll()}
 function resetVehicle(key){let saved=loadScale();localStorage.removeItem(scaleKey());let before=app.date;buildVehicles();let def=app.scale[key];if(saved){for(const [k,v] of Object.entries(saved))if(k!==key&&app.scale[k])app.scale[k]=v;if(def)app.scale[key]=def;normalizeOperationalAssignments();persistScale(false);renderAll()}toast('Carro restaurado para a referência inicial')}
 function resetDay(){if(!confirm('Remover todos os ajustes desta data e voltar para a referência inicial?'))return;localStorage.removeItem(scaleKey());buildVehicles();toast('Ajustes do dia removidos')}
-function renderAll(){renderKpis();renderBoard();renderPeople();renderBase();renderTeam();renderAbsences();renderAbsenceHistory();renderPCD();renderIndicators();$('#sourceNote').innerHTML=`Base Fidelização: ${esc(app.data.source?.fidelity||app.data.source?.workbook||'XLSX')} · Equipes: ${esc(app.data.source?.team||'base embutida')} · PCD: ${esc(app.data.source?.pcd||'CSV')} · ordem: VAN → VULCK → TRUCK → SIDER → SPOT · <span class="history-note">${app.historyMode?'Consulta histórica local':'Histórico local ativo'}</span>`}
+function renderAll(){renderKpis();renderBoard();renderPeople();renderBase();renderTeam();renderAbsences();renderAbsenceHistory();renderPCD();renderIndicators();$('#sourceNote').innerHTML=`Base Fidelização: ${esc(app.data.source?.fidelity||app.data.source?.workbook||'XLSX')} · Equipes: ${esc(app.data.source?.team||'base embutida')} · PCD: ${esc(app.data.source?.pcd||'CSV')} · escala: VAN → VULCK → TRUCK → SIDER · Freteiro/SPOT somente no PCD · <span class="history-note">${app.historyMode?'Consulta histórica local':'Histórico local ativo'}</span>`}
 function applyStatusFilter(value){let el=$('#statusFilter');if(!el)return;el.value=value;renderBoard();}
 function renderKpis(){
   let loaded=app.vehicles.filter(v=>v.loaded),fixed=loaded.filter(v=>v.base&&code(v.base.driverCode)&&code(v.base.driverCode)!=='800'&&norm(v.base.driverName)!=='PARADO'),fok=fixed.filter(v=>fidelity(v,'driver')==='ok').length;
   let hfixed=loaded.filter(v=>v.base&&code(v.base.helperCode)&&code(v.base.helperCode)!=='800'),hok=hfixed.filter(v=>fidelity(v,'helper')==='ok').length;
-  let fixedVehicles=app.vehicles.filter(v=>!v.isSpot),spots=app.vehicles.filter(v=>v.isSpot),pending=loaded.filter(v=>!code(app.scale[v.key]?.driverCode)).length,ind=fixedVehicles.filter(v=>norm(v.base?.availability).includes('INDISP')).length,noMap=fixedVehicles.filter(v=>!v.loaded).length;
-  let d0Maps=app.vehicles.reduce((s,v)=>s+v.routes.filter(r=>r.date===app.date).length,0);
-  let carryMaps=app.vehicles.reduce((s,v)=>s+v.routes.filter(r=>r.date!==app.date&&isOpenMap(r)).length,0);
+  let fixedVehicles=app.vehicles.filter(v=>!v.isSpot),pending=loaded.filter(v=>!code(app.scale[v.key]?.driverCode)).length,ind=fixedVehicles.filter(v=>norm(v.base?.availability).includes('INDISP')).length,noMap=fixedVehicles.filter(v=>!v.loaded).length;
+  // KPI PCD = visão integral do arquivo para a data: inclui REC, Freteiro e demais mapas.
+  let d0Maps=app.data.pcdRows.filter(r=>r.date===app.date).length;
+  let carryMaps=app.data.pcdRows.filter(r=>isPriorOpenMap(r,app.date)).length;
+  let freteiroD0=app.data.pcdRows.filter(r=>r.date===app.date&&isFreteiroMap(r)).length;
+  let recD0=app.data.pcdRows.filter(r=>r.date===app.date&&isRecMap(r)).length;
   let fixedD0=fixedVehicles.filter(v=>v.routes.some(r=>r.date===app.date)).length;
   let html=[
-    ['cyan','Mapas D0',d0Maps,`data ${app.date}`],
+    ['cyan','Mapas D0',d0Maps,`100% do PCD em ${app.date}${recD0?` · ${recD0} REC`:''}`],
     ['gold','Pendências D-1+',carryMaps,'mapas anteriores ainda em aberto'],
-    ['cyan','Frota fixa',fixedVehicles.length,`${fixedD0} com mapa D0 · ${spots.length} spot no dia`],
+    ['cyan','Frota fixa',fixedVehicles.length,`${fixedD0} com mapa operacional D0 · ${freteiroD0} Freteiro/SPOT fora da escala`],
     ['green','Fidelização Frota',fixed.length?Math.round(fok/fixed.length*100)+'%':'—',`${fok}/${fixed.length} veículos ativos no carro fixo`],
     ['green','Fidelização ajudante',hfixed.length?Math.round(hok/hfixed.length*100)+'%':'—',`${hok}/${hfixed.length} com referência`],
     ['red','Motorista pendente',pending,'veículos com carga e sem motorista','PENDING'],
@@ -710,9 +721,10 @@ async function importBackup(file){
 
 function renderPCD(){
   let q=norm($('#pcdSearch').value||''),fixed=basePlateSet();
-  // D0: todos os mapas da data selecionada (exceto placas genéricas).
-  // Dias anteriores: somente mapas ainda em aberto, sem limite de D-1 (D-2, D-3... também entram).
-  let included=app.data.pcdRows.filter(r=>!isGenericPlate(r.plate)&&(r.date===app.date||isPriorOpenMap(r,app.date)));
+  // A aba PCD é o espelho operacional do arquivo:
+  // 1) 100% dos mapas da data selecionada, sem excluir REC, Freteiro ou placa fora da base;
+  // 2) mapas de datas anteriores que continuam em aberto (D-1, D-2, ...).
+  let included=app.data.pcdRows.filter(r=>r.date===app.date||isPriorOpenMap(r,app.date));
   let rows=included.filter(r=>!q||norm(Object.values(r).join(' ')).includes(q)).sort((a,b)=>
     ((a.date===app.date?0:1)-(b.date===app.date?0:1)) ||
     (dateValue(b.date)-dateValue(a.date)) ||
@@ -722,15 +734,18 @@ function renderPCD(){
   );
   let d0=included.filter(r=>r.date===app.date).length;
   let prior=included.filter(r=>r.date!==app.date).length;
-  let spotD0=included.filter(r=>r.date===app.date&&!fixed.has(norm(r.plate))).length;
-  $('#pcdSummary').textContent=`${d0} mapa(s) D0 · ${prior} pendência(s) D-1+ em aberto · ${spotD0} spot D0`;
+  let spotD0=included.filter(r=>r.date===app.date&&isFreteiroMap(r)).length;
+  let recD0=included.filter(r=>r.date===app.date&&isRecMap(r)).length;
+  $('#pcdSummary').textContent=`${d0} mapa(s) D0 · ${prior} pendência(s) D-1+ em aberto · ${spotD0} Freteiro/SPOT · ${recD0} REC`;
   let dmap=personMap('driver');
   $('#pcdBody').innerHTML=rows.map(r=>{
-    let p=dmap.get(code(r.driverCode)),old=r.date!==app.date,spot=!fixed.has(norm(r.plate)),day=relativeDayLabel(r.date,app.date);
+    let p=dmap.get(code(r.driverCode)),old=r.date!==app.date,spot=isFreteiroMap(r),rec=isRecMap(r),outside=!fixed.has(norm(r.plate))&&!spot&&!rec,day=relativeDayLabel(r.date,app.date);
     let statusBits=old?`<span class="d1-tag">${esc(day)}</span>`:`<span class="pcd-current-tag">D0</span>`;
-    if(spot&&r.date===app.date)statusBits+=` <span class="open-tag mpd-carregado">SPOT</span>`;
+    if(spot)statusBits+=` <span class="open-tag mpd-carregado">SPOT · FRETEIRO</span>`;
+    else if(rec)statusBits+=` <span class="open-tag mpd-gerado">REC</span>`;
+    else if(outside)statusBits+=` <span class="open-tag mpd-open">FORA BASE</span>`;
     statusBits+=` <span class="open-tag ${mpdPhaseClass(r)}">${esc(mpdPhaseLabel(r))}</span>`;
-    return `<tr class="${old?'d1-row':''}"><td class="td-main">${esc(r.date)}</td><td class="td-main">${esc(r.map)}</td><td>${statusBits}</td><td>${esc(r.kind)}</td><td class="td-main">${esc(r.plate)}</td><td>${esc(r.vehicleType)}</td><td>${esc(r.driverCode)}${p?' · '+esc(p.name):''}</td><td>${esc(r.km)}</td><td>${esc(r.deliveries)}</td><td>${r.occWeight?esc(r.occWeight)+'%':'—'}</td><td>${esc(r.currentLoad)}</td><td class="routecell">${esc(r.region)}</td></tr>`
+    return `<tr class="${old?'d1-row':''}"><td class="td-main">${esc(r.date)}</td><td class="td-main">${esc(r.map)}</td><td>${statusBits}</td><td>${esc(r.kind)}</td><td class="td-main">${esc(r.plate)}</td><td>${esc(r.vehicleType)}</td><td>${esc(r.driverCode)}${p?' · '+esc(p.name):''}</td><td>${esc(r.km)}</td><td>${esc(r.deliveries)}</td><td>${r.occWeight?esc(r.occWeight)+'%':'—'}</td><td>${esc(r.load||'—')}</td><td class="routecell">${esc(r.region)}</td></tr>`
   }).join('')
 }
 function renderIndicators(){
@@ -801,8 +816,8 @@ async function importCSV(file){
   let rows=parseDelimited(text,';'),pcd=csvRowsToPCD(rows);if(!pcd.length){toast('CSV sem dados válidos da transportadora 10');return}
   app.data.pcdRows=pcd;app.data.source={...app.data.source,pcd:file.name};saveDataset();
   let d=preferredScaleDate(pcd);refreshDates(d);buildVehicles();
-  let fixed=basePlateSet(),d0=pcd.filter(r=>r.date===app.date&&!isGenericPlate(r.plate)).length,prior=pcd.filter(r=>isPriorOpenMap(r,app.date)&&!isGenericPlate(r.plate)).length,spotD0=pcd.filter(r=>r.date===app.date&&!fixed.has(norm(r.plate))&&!isGenericPlate(r.plate)).length;
-  toast(`${d0} mapa(s) D0 · ${prior} pendência(s) anterior(es) em aberto · ${spotD0} spot D0`)
+  let d0=pcd.filter(r=>r.date===app.date).length,prior=pcd.filter(r=>isPriorOpenMap(r,app.date)).length,spotD0=pcd.filter(r=>r.date===app.date&&isFreteiroMap(r)).length,recD0=pcd.filter(r=>r.date===app.date&&isRecMap(r)).length;
+  toast(`${d0} mapa(s) D0 · ${prior} pendência(s) anterior(es) em aberto · ${spotD0} Freteiro/SPOT · ${recD0} REC`)
 }
 function sheetJSON(wb,name){let ws=wb.Sheets[name];return ws?XLSX.utils.sheet_to_json(ws,{header:1,defval:'',raw:false}):[]}
 function xcell(v){return String(v??'').replace(/\s+/g,' ').trim()}

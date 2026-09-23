@@ -639,7 +639,7 @@ function deleteTeam(index){
 }
 function unassignedPeople(role){
   let people=role==='driver'?app.data.drivers:app.data.helpers;
-  return people.filter(p=>{let c=code(p.code);if(!c)return false;if(role==='helper'&&['800','801'].includes(c))return false;return !findAssigned(role,c)});
+  return people.filter(p=>{let c=code(p.code);if(!c)return false;if(role==='helper'&&['800','801'].includes(c))return false;if(norm(p.status).includes('FERIA'))return false;return !findAssigned(role,c)});
 }
 function absenceTypeClass(t){let n=norm(t);return n.includes('FALTA')?'falta':n.includes('FOLGA')?'folga':n.includes('FERIA')?'ferias':n.includes('ATEST')?'atestado':n.includes('INSS')?'inss':''}
 function prepareAbsence(role,c){

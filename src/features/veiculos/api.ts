@@ -68,6 +68,7 @@ function montarLinha(linha: unknown[], chaves: string[]): NovoVeiculo {
     placa: ler(linha, chaves, 'PLACA').toUpperCase(),
     tipo_veiculo: ler(linha, chaves, 'TIPOVEICULO') || 'OUTRO',
     frota: ler(linha, chaves, 'FROTA'),
+    territorio: ler(linha, chaves, 'TERRITORIO'),
     disponibilidade: ler(linha, chaves, 'DISP'),
     motorista_fixo_codigo: ler(linha, chaves, 'CODM'),
     motorista_fixo_nome: ler(linha, chaves, 'MOTORISTA'),

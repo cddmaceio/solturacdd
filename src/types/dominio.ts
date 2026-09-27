@@ -2,6 +2,7 @@ import type { PapelChave } from '@/lib/rbac'
 
 export type TipoColaborador = 'motorista' | 'ajudante'
 export type PapelEquipe = TipoColaborador
+export type PapelSlot = 'motorista' | 'ajudante' | 'ajudante2' | 'chapa'
 
 export type TipoAusencia =
   | 'Folga'
@@ -67,6 +68,7 @@ export type Veiculo = {
   tipo_veiculo: string
   frota: string | null
   disponibilidade: string | null
+  territorio: string | null
   motorista_fixo_codigo: string | null
   motorista_fixo_nome: string | null
   ativo: boolean
@@ -110,11 +112,17 @@ export type EscalaLinha = {
   motorista_nome: string | null
   ajudante_codigo: string | null
   ajudante_nome: string | null
+  ajudante2_codigo: string | null
+  ajudante2_nome: string | null
+  chapa_codigo: string | null
+  chapa_nome: string | null
   sala: string | null
   observacao: string | null
   /** Slot escolhido/limpo pelo usuário; não é reposto pela equipe fixa. */
   motorista_manual?: boolean
   ajudante_manual?: boolean
+  ajudante2_manual?: boolean
+  chapa_manual?: boolean
 }
 
 export type Ausencia = {

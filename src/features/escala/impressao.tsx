@@ -20,7 +20,8 @@ const ORDEM_SALAS = ['ELITE', 'FORÇA', 'VANS', 'VESPERTINA', 'AS', 'SPOT', 'OUT
 
 function densidade(n: number): string {
   if (n > 38) return ' density-ultra'
-  if (n > 26) return ' density-tight'
+  if (n > 22) return ' density-tight'
+  if (n <= 8) return ' density-roomy'
   return ''
 }
 
@@ -83,7 +84,7 @@ function TabelaImpressao({
           <th>Frota</th>
           <th>Mapa</th>
           <th>Motorista</th>
-          <th>Ajudante</th>
+          <th>Equipe de ajudantes</th>
         </tr>
       </thead>
       <tbody>
@@ -99,7 +100,21 @@ function TabelaImpressao({
               {pessoaImpressao(v.motorista_codigo, nomeDe('motorista', v.motorista_codigo))}
             </td>
             <td className="print-person">
-              {pessoaImpressao(v.ajudante_codigo, nomeDe('ajudante', v.ajudante_codigo))}
+              <span className="print-team-list">
+                <span className="print-team-item">
+                  <strong>A1</strong> {pessoaImpressao(v.ajudante_codigo, nomeDe('ajudante', v.ajudante_codigo))}
+                </span>
+                {code(v.ajudante2_codigo) && (
+                  <span className="print-team-item">
+                    <strong>A2</strong> {pessoaImpressao(v.ajudante2_codigo ?? '', nomeDe('ajudante', v.ajudante2_codigo ?? ''))}
+                  </span>
+                )}
+                {(code(v.chapa_codigo) || v.chapa_nome) && (
+                  <span className="print-team-item">
+                    <strong>CHAPA/PX</strong> {v.chapa_codigo ? `${code(v.chapa_codigo)} · ` : ''}{v.chapa_nome || nomeDe('ajudante', v.chapa_codigo ?? '') || '—'}
+                  </span>
+                )}
+              </span>
             </td>
           </tr>
         ))}
@@ -277,7 +292,7 @@ export function DialogoImpressao({
             <b className="block text-sm">▣ Resumo geral</b>
             <span className="mt-1 block text-xs leading-relaxed text-muted-foreground">
               Somente veículos com mapa vinculado, em A4 retrato: Sala, Placa, Frota, Mapa,
-              Motorista e Ajudante.
+              Motorista e equipe completa (Ajudante 1/2 e Chapa/PX).
             </span>
           </button>
           <button
@@ -293,8 +308,8 @@ export function DialogoImpressao({
           </button>
         </div>
         <p className="rounded-lg bg-muted/40 p-2.5 text-[11px] leading-relaxed text-muted-foreground">
-          A impressão mostra apenas Placa, Frota, Mapa, Motorista e Ajudante (e Sala no resumo
-          geral). Rota, observações, filtros e veículos sem mapa não são impressos.
+          A impressão mostra Placa, Frota, Mapa, Motorista e equipe de ajudantes (e Sala no
+          resumo geral). Rota, observações, filtros e veículos sem mapa não são impressos.
         </p>
       </DialogContent>
     </Dialog>

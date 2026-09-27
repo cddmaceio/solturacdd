@@ -16,6 +16,7 @@ export function code(valor: unknown): string {
 }
 
 export function brNum(valor: unknown): number {
+  if (typeof valor === 'number') return Number.isFinite(valor) ? valor : 0
   if (valor === null || valor === undefined || valor === '') return 0
   const texto = String(valor)
     .trim()

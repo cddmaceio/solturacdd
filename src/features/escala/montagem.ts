@@ -12,7 +12,10 @@ export type VeiculoEscala = {
   temD1: boolean
   motorista_codigo: string
   ajudante_codigo: string
+  ajudante2_codigo: string
   ajudante_referencia: string
+  chapa_codigo: string
+  chapa_nome: string
   grupo: string
   observacao: string
 }
@@ -133,17 +136,17 @@ export function estatisticasVeiculo(v: VeiculoEscala): EstatisticasVeiculo {
   const km = v.rotas.reduce((s, r) => s + brNum(r.km_previsto), 0)
   const entregas = v.rotas.reduce((s, r) => s + brNum(r.entregas), 0)
   const occs = v.rotas
-    .map((r) => brNum(r.ocupacao_caixas_pct))
-    .filter((x) => x || String(x) === '0')
+    .map((r) => r.ocupacao_caixas_pct)
+    .filter((x): x is number => x != null)
   const occWeights = v.rotas
-    .map((r) => brNum(r.ocupacao_peso_pct))
-    .filter((x) => x || String(x) === '0')
+    .map((r) => r.ocupacao_peso_pct)
+    .filter((x): x is number => x != null)
   const tempoMinutos = v.rotas.reduce((s, r) => s + minutosTempo(r.tempo_previsto), 0)
   return {
     km,
     entregas,
-    ocupacaoCaixas: occs.length ? occs.reduce((a, b) => a + b, 0) / occs.length : 0,
-    ocupacaoPeso: occWeights.length ? occWeights.reduce((a, b) => a + b, 0) / occWeights.length : 0,
+    ocupacaoCaixas: occs.length ? Math.max(...occs) : 0,
+    ocupacaoPeso: occWeights.length ? Math.max(...occWeights) : 0,
     tempoMinutos,
     tempoRotulo: rotuloTempo(tempoMinutos),
   }
@@ -248,7 +251,10 @@ export function montarEscala(entrada: EntradaMontagem): VeiculoEscala[] {
       temD1: rotas.some((r) => r.data_entrega !== dataIso),
       motorista_codigo: '',
       ajudante_codigo: '',
+      ajudante2_codigo: '',
       ajudante_referencia: ajudantePorMotorista.get(code(base.motorista_fixo_codigo)) ?? '',
+      chapa_codigo: '',
+      chapa_nome: '',
       grupo: salaDoMotorista(base.motorista_fixo_codigo ?? '', pessoas),
       observacao: '',
     })
@@ -269,6 +275,7 @@ export function montarEscala(entrada: EntradaMontagem): VeiculoEscala[] {
       disponibilidade: '',
       motorista_fixo_codigo: null,
       motorista_fixo_nome: null,
+      territorio: '',
       ativo: true,
     }
     resultado.push({
@@ -281,7 +288,10 @@ export function montarEscala(entrada: EntradaMontagem): VeiculoEscala[] {
       temD1: rotas.some((r) => r.data_entrega !== dataIso),
       motorista_codigo: '',
       ajudante_codigo: '',
+      ajudante2_codigo: '',
       ajudante_referencia: '',
+      chapa_codigo: '',
+      chapa_nome: '',
       grupo: 'SPOT',
       observacao: '',
     })
@@ -318,7 +328,10 @@ export function montarEscala(entrada: EntradaMontagem): VeiculoEscala[] {
         : baseHelper && (['800', '801'].includes(baseHelper) || ajudanteNaBase)
           ? baseHelper
           : '',
-       grupo: v.isSpot ? 'SPOT' : salaDoMotorista(baseDriver, pessoas),
+      ajudante2_codigo: '',
+      chapa_codigo: '',
+      chapa_nome: '',
+      grupo: v.isSpot ? 'SPOT' : salaDoMotorista(baseDriver, pessoas),
       observacao: '',
     }
 
@@ -340,6 +353,17 @@ export function montarEscala(entrada: EntradaMontagem): VeiculoEscala[] {
               : salva.ajudante_manual
                 ? ''
                 : def.ajudante_codigo,
+            ajudante2_codigo: code(salva.ajudante2_codigo)
+              ? salva.ajudante2_codigo ?? ''
+              : salva.ajudante2_manual
+                ? ''
+                : def.ajudante2_codigo,
+            chapa_codigo: code(salva.chapa_codigo)
+              ? salva.chapa_codigo ?? ''
+              : salva.chapa_manual
+                ? ''
+                : def.chapa_codigo,
+            chapa_nome: salva.chapa_nome ?? '',
             grupo: salva.sala || def.grupo,
             observacao: salva.observacao ?? '',
           }
@@ -354,38 +378,46 @@ export function montarEscala(entrada: EntradaMontagem): VeiculoEscala[] {
       const currentHelper = code(estado.ajudante_codigo)
       const savedDriver = code(salva?.motorista_codigo)
       const savedHelper = code(salva?.ajudante_codigo)
+      const savedHelper2 = code(salva?.ajudante2_codigo)
       const driverStillDefault = !salva || !savedDriver || savedDriver === baseDriver
       const helperStillDefault = !salva || !savedHelper || savedHelper === baseHelper
       const driverManual = Boolean(salva?.motorista_manual)
       const helperManual = Boolean(salva?.ajudante_manual)
+      const helper2Manual = Boolean(salva?.ajudante2_manual)
       if (!driverManual && (driverStillDefault || !currentDriver)) {
         estado.motorista_codigo = carryDriver
       }
       if (!helperManual && helperStillDefault && currentHelper === baseHelper) {
         estado.ajudante_codigo = ''
       }
+      if (!helper2Manual && (!salva || !savedHelper2)) estado.ajudante2_codigo = ''
     }
 
     // Pessoa removida da Base Equipes não reaparece por causa de ajuste salvo.
     // Exceção: motorista do mapa pendente (vem do PCD) e códigos fixos 800/801.
     if (!v.isSpot) {
       const currentDriver = code(estado.motorista_codigo)
-      const currentHelper = code(estado.ajudante_codigo)
       if (currentDriver && !disponiveisMotoristas.has(currentDriver) && currentDriver !== carryDriver) {
         estado.motorista_codigo = ''
       }
-      if (
-        currentHelper &&
-        currentHelper !== '800' &&
-        currentHelper !== '801' &&
-        !disponiveisAjudantes.has(currentHelper)
-      ) {
-        estado.ajudante_codigo = ''
+      for (const campo of ['ajudante_codigo', 'ajudante2_codigo'] as const) {
+        const currentHelper = code(estado[campo])
+        if (
+          currentHelper &&
+          currentHelper !== '800' &&
+          currentHelper !== '801' &&
+          !disponiveisAjudantes.has(currentHelper)
+        ) {
+          estado[campo] = ''
+        }
       }
     }
 
     v.motorista_codigo = estado.motorista_codigo
     v.ajudante_codigo = estado.ajudante_codigo
+    v.ajudante2_codigo = estado.ajudante2_codigo
+    v.chapa_codigo = estado.chapa_codigo
+    v.chapa_nome = estado.chapa_nome
     v.grupo = estado.grupo || v.grupo
     v.observacao = estado.observacao
     if (v.isSpot) v.grupo = 'SPOT'
@@ -399,7 +431,13 @@ function ehPendenciaAnterior(mapa: PcdMapa, dataIso: string): boolean {
   return mapa.data_entrega < dataIso && mapaAberto(mapa)
 }
 
-function pontuacaoReivindicacao(v: VeiculoEscala, papel: PapelEquipe, c: string, dataIso: string): number {
+function pontuacaoReivindicacao(
+  v: VeiculoEscala,
+  papel: PapelEquipe,
+  c: string,
+  dataIso: string,
+  campo: 'motorista_codigo' | 'ajudante_codigo' | 'ajudante2_codigo' | 'chapa_codigo',
+): number {
   if (!v.rotas.length) return 0
   if (!c) return 0
   if (papel === 'motorista' && code(mapaPendencia(v, dataIso)?.motorista_codigo ?? '') === c)
@@ -407,7 +445,7 @@ function pontuacaoReivindicacao(v: VeiculoEscala, papel: PapelEquipe, c: string,
   const hasD0 = v.rotas.some((r) => r.data_entrega === dataIso)
   const fixo = code(papel === 'motorista' ? v.base?.motorista_fixo_codigo : v.ajudante_referencia)
   let score = hasD0 ? 300 : 200
-  if (c === fixo) score += 20
+  if (c === fixo && (papel === 'motorista' || campo === 'ajudante_codigo')) score += 20
   if (v.isSpot) score += 5
   return score
 }
@@ -423,31 +461,37 @@ export function normalizarAlocacoes(veiculos: VeiculoEscala[], dataIso: string):
     if (v.rotas.length) continue
     v.motorista_codigo = ''
     v.ajudante_codigo = ''
+    v.ajudante2_codigo = ''
+    v.chapa_codigo = ''
+    v.chapa_nome = ''
   }
 
-  const papeis: [PapelEquipe, 'motorista_codigo' | 'ajudante_codigo'][] = [
-    ['motorista', 'motorista_codigo'],
-    ['ajudante', 'ajudante_codigo'],
+  const papeis: [PapelEquipe, ('motorista_codigo' | 'ajudante_codigo' | 'ajudante2_codigo' | 'chapa_codigo')[]][] = [
+    ['motorista', ['motorista_codigo']],
+    ['ajudante', ['ajudante_codigo', 'ajudante2_codigo', 'chapa_codigo']],
   ]
 
-  for (const [papel, campo] of papeis) {
-    const claims = new Map<string, VeiculoEscala[]>()
+  for (const [papel, campos] of papeis) {
+    const claims = new Map<string, { veiculo: VeiculoEscala; campo: 'motorista_codigo' | 'ajudante_codigo' | 'ajudante2_codigo' | 'chapa_codigo' }[]>()
     for (const v of veiculos) {
-      const c = code(v[campo] as string)
-      if (!c || (papel === 'ajudante' && (c === '800' || c === '801'))) continue
-      if (!claims.has(c)) claims.set(c, [])
-      claims.get(c)!.push(v)
+      for (const campo of campos) {
+        const c = code(v[campo])
+        if (!c || (papel === 'ajudante' && (c === '800' || c === '801'))) continue
+        if (!claims.has(c)) claims.set(c, [])
+        claims.get(c)!.push({ veiculo: v, campo })
+      }
     }
     for (const [c, lista] of claims) {
       if (lista.length < 2) continue
       lista.sort(
         (a, b) =>
-          pontuacaoReivindicacao(b, papel, c, dataIso) -
-            pontuacaoReivindicacao(a, papel, c, dataIso) ||
-          String(a.placa).localeCompare(String(b.placa), 'pt-BR', { numeric: true }),
+          pontuacaoReivindicacao(b.veiculo, papel, c, dataIso, b.campo) -
+            pontuacaoReivindicacao(a.veiculo, papel, c, dataIso, a.campo) ||
+          String(a.veiculo.placa).localeCompare(String(b.veiculo.placa), 'pt-BR', { numeric: true }),
       )
-      for (const v of lista.slice(1)) {
-        v[campo] = ''
+      for (const claim of lista.slice(1)) {
+        claim.veiculo[claim.campo] = ''
+        if (claim.campo === 'chapa_codigo') claim.veiculo.chapa_nome = ''
       }
     }
   }
@@ -469,6 +513,12 @@ export function paraLinhasPersistencia(
     ajudante_codigo: v.ajudante_codigo,
     ajudante_nome: porCodigo.get(`ajudante|${code(v.ajudante_codigo)}`) ?? '',
     ajudante_manual: false,
+    ajudante2_codigo: v.ajudante2_codigo,
+    ajudante2_nome: porCodigo.get(`ajudante|${code(v.ajudante2_codigo)}`) ?? '',
+    ajudante2_manual: false,
+    chapa_codigo: v.chapa_codigo,
+    chapa_nome: v.chapa_nome || (code(v.chapa_codigo) ? porCodigo.get(`ajudante|${code(v.chapa_codigo)}`) ?? '' : ''),
+    chapa_manual: false,
     sala: v.grupo,
     observacao: v.observacao,
   }))

@@ -32,6 +32,7 @@ function veiculo(placa: string, extra: Partial<Veiculo> = {}): Veiculo {
     tipo_veiculo: 'TRUCK',
     frota: 'F1',
     disponibilidade: 'DISPONIVEL',
+    territorio: null,
     motorista_fixo_codigo: null,
     motorista_fixo_nome: null,
     ativo: true,
@@ -261,6 +262,27 @@ describe('montarEscala', () => {
     expect(v.ajudante_codigo).toBe('60')
   })
 
+  it('restaura Ajudante 2 e o Chapa/PX dos slots salvos', () => {
+    const veiculos = montar({
+      veiculos: [veiculo('LAA1L30')],
+      mapas: [mapa('LAA1L30')],
+      pessoas: [pessoa('62', 'ajudante')],
+      salvas: [{
+        ...linha('LAA1L30', '', ''),
+        ajudante2_codigo: '62',
+        ajudante2_nome: 'MARIA 2',
+        ajudante2_manual: true,
+        chapa_codigo: '',
+        chapa_nome: 'PAULO PX',
+        chapa_manual: true,
+      }],
+    })
+    const v = porPlaca(veiculos, 'LAA1L30')
+    expect(v.ajudante2_codigo).toBe('62')
+    expect(v.chapa_codigo).toBe('')
+    expect(v.chapa_nome).toBe('PAULO PX')
+  })
+
   it('ordena por tipo de veículo (VAN → VULCK → TRUCK → SIDER → SPOT)', () => {
     const veiculos = montar({
       veiculos: [
@@ -391,7 +413,10 @@ describe('fidelidade', () => {
       temD1: false,
       motorista_codigo: '10',
       ajudante_codigo: '',
+      ajudante2_codigo: '',
       ajudante_referencia: '20',
+      chapa_codigo: '',
+      chapa_nome: '',
       grupo: 'ELITE',
       observacao: '',
     }
@@ -419,7 +444,10 @@ describe('normalizarAlocacoes', () => {
       temD1: false,
       motorista_codigo: '10',
       ajudante_codigo: '20',
+      ajudante2_codigo: '',
       ajudante_referencia: '',
+      chapa_codigo: '',
+      chapa_nome: '',
       grupo: 'ELITE',
       observacao: '',
     }
@@ -437,6 +465,24 @@ describe('normalizarAlocacoes', () => {
     expect(comMapa.motorista_codigo).toBe('10')
     expect(comMapa2.motorista_codigo).toBe('')
   })
+
+  it('deduplica o mesmo ajudante entre Ajudante 1 e Ajudante 2', () => {
+    const d0: VeiculoEscala = {
+      chave: 'D0', placa: 'D0', isSpot: false, base: veiculo('D0'), rotas: [mapa('D0')],
+      carregado: true, temD1: false, motorista_codigo: '', ajudante_codigo: '',
+      ajudante2_codigo: '20', ajudante_referencia: '', chapa_codigo: '', chapa_nome: '',
+      grupo: 'ELITE', observacao: '',
+    }
+    const pendente: VeiculoEscala = {
+      chave: 'D1', placa: 'D1', isSpot: false, base: veiculo('D1'),
+      rotas: [mapa('D1', { data_entrega: '2026-09-25' })], carregado: true, temD1: true,
+      motorista_codigo: '', ajudante_codigo: '20', ajudante2_codigo: '', ajudante_referencia: '',
+      chapa_codigo: '', chapa_nome: '', grupo: 'ELITE', observacao: '',
+    }
+    normalizarAlocacoes([pendente, d0], DATA)
+    expect(d0.ajudante2_codigo).toBe('20')
+    expect(pendente.ajudante_codigo).toBe('')
+  })
 })
 
 describe('paraLinhasPersistencia', () => {
@@ -451,13 +497,17 @@ describe('paraLinhasPersistencia', () => {
       temD1: false,
       motorista_codigo: '10',
       ajudante_codigo: '20',
+      ajudante2_codigo: '30',
       ajudante_referencia: '',
+      chapa_codigo: 'PX7',
+      chapa_nome: 'PEDRO PX',
       grupo: 'ELITE',
       observacao: 'obs',
     }
     const linhas = paraLinhasPersistencia([v], DATA, [
       pessoa('10', 'motorista', 'JOAO SILVA'),
       pessoa('20', 'ajudante', 'MARIA SOUZA'),
+      pessoa('30', 'ajudante', 'MARIA 2'),
     ])
     expect(linhas[0]).toMatchObject({
       data_operacao: DATA,
@@ -468,6 +518,12 @@ describe('paraLinhasPersistencia', () => {
       ajudante_codigo: '20',
       ajudante_nome: 'MARIA SOUZA',
       ajudante_manual: false,
+      ajudante2_codigo: '30',
+      ajudante2_nome: 'MARIA 2',
+      ajudante2_manual: false,
+      chapa_codigo: 'PX7',
+      chapa_nome: 'PEDRO PX',
+      chapa_manual: false,
       sala: 'ELITE',
       observacao: 'obs',
     })
@@ -486,7 +542,10 @@ describe('compararVeiculos', () => {
       temD1: false,
       motorista_codigo: '',
       ajudante_codigo: '',
+      ajudante2_codigo: '',
       ajudante_referencia: '',
+      chapa_codigo: '',
+      chapa_nome: '',
       grupo: '',
       observacao: '',
     })
@@ -505,6 +564,10 @@ function linha(placa: string, motorista: string, ajudante: string): EscalaLinha 
     motorista_nome: '',
     ajudante_codigo: ajudante,
     ajudante_nome: '',
+    ajudante2_codigo: '',
+    ajudante2_nome: '',
+    chapa_codigo: '',
+    chapa_nome: '',
     sala: '',
     observacao: '',
   }

@@ -10,6 +10,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { Badge } from '@/components/ui/badge'
 import { CabecalhoPagina } from '@/components/cabecalho-pagina'
 import { useAuth } from '@/features/autenticacao/auth-provider'
 import { useDataOperacao } from '@/hooks/use-data-operacao'
@@ -19,11 +20,28 @@ import {
   estatisticasVeiculo,
   fidelidade,
   rotuloTipoVeiculo,
+  type EstatisticasVeiculo,
+  type VeiculoEscala,
 } from '@/features/escala/montagem'
 import { code, norm } from '@/lib/texto'
 import { baixarCsv } from '@/lib/csv'
 import { paraDmy } from '@/lib/datas'
 import type { PapelEquipe } from '@/types/dominio'
+
+const TR_CRITICO_MIN = 9 * 60 + 10
+const TR_CRITICO_MAX = 9 * 60 + 25
+const LIMITE_OCUPACAO_PESO = 90
+const LIMITE_ENTREGAS = 20
+
+function motivosCriticos(v: VeiculoEscala): { stats: EstatisticasVeiculo; motivos: string[] } {
+  const stats = estatisticasVeiculo(v)
+  const motivos: string[] = []
+  const trNaFaixa = stats.tempoMinutos >= TR_CRITICO_MIN && stats.tempoMinutos <= TR_CRITICO_MAX
+  if (!trNaFaixa) return { stats, motivos }
+  if (stats.entregas >= LIMITE_ENTREGAS) motivos.push(`${stats.entregas} entregas`)
+  if (stats.ocupacaoPeso >= LIMITE_OCUPACAO_PESO) motivos.push(`Ocupação ${Math.round(stats.ocupacaoPeso)}%`)
+  return { stats, motivos }
+}
 
 export function TelaIndicadores() {
   const { pode } = useAuth()
@@ -76,6 +94,20 @@ export function TelaIndicadores() {
     ]
   }, [veiculos])
 
+  const criticos = useMemo(
+    () =>
+      veiculos
+        .map((v) => ({ v, ...motivosCriticos(v) }))
+        .filter((c) => c.motivos.length > 0)
+        .sort(
+          (a, b) =>
+            b.motivos.length - a.motivos.length ||
+            b.stats.tempoMinutos - a.stats.tempoMinutos ||
+            b.stats.entregas - a.stats.entregas,
+        ),
+    [veiculos],
+  )
+
   const alertas = useMemo(() => {
     const saida: { v: (typeof veiculos)[number]; lista: string[] }[] = []
     for (const v of veiculos) {
@@ -93,6 +125,8 @@ export function TelaIndicadores() {
       if (statusD) a.push(`Motorista: ${statusD}`)
       if (statusH) a.push(`Ajudante: ${statusH}`)
       if (disponibilidade(v) === 'UNAVAILABLE') a.push('Veículo indisponível na base')
+      const { stats: statsCrit, motivos } = motivosCriticos(v)
+      if (motivos.length) a.push(`Crítico: TR ${statsCrit.tempoRotulo} · ${motivos.join(' · ')}`)
       if (a.length) saida.push({ v, lista: a })
     }
     const q = norm(busca)
@@ -109,12 +143,17 @@ export function TelaIndicadores() {
       'Tipo Veículo',
       'Placa',
       'Frota',
+      'Território',
       'Mapa(s)',
       'AS/Rota',
       'Motorista Cod',
       'Motorista',
       'Ajudante Cod',
       'Ajudante',
+      'Ajudante 2 Cod',
+      'Ajudante 2',
+      'Chapa/PX Cod',
+      'Chapa/PX',
       'Motorista Fixo',
       'Ajudante Fixo',
       'Fidelização Frota',
@@ -134,12 +173,17 @@ export function TelaIndicadores() {
         rotuloTipoVeiculo(v),
         v.placa,
         v.isSpot ? 'SPOT' : (v.base?.frota ?? ''),
+        v.base?.territorio ?? '',
         v.rotas.map((r) => r.mapa).join(' | '),
         [...new Set(v.rotas.map((r) => r.as_rota).filter(Boolean))].join(' / '),
         v.motorista_codigo || '',
         nomeDe('motorista', v.motorista_codigo),
         v.ajudante_codigo || '',
         nomeDe('ajudante', v.ajudante_codigo),
+        v.ajudante2_codigo || '',
+        nomeDe('ajudante', v.ajudante2_codigo),
+        v.chapa_codigo || '',
+        v.chapa_nome || nomeDe('ajudante', v.chapa_codigo) || '',
         v.base?.motorista_fixo_codigo
           ? `${v.base.motorista_fixo_codigo} - ${v.base.motorista_fixo_nome ?? ''}`
           : '',
@@ -148,9 +192,9 @@ export function TelaIndicadores() {
           : '',
         fidelidade(v, 'motorista'),
         fidelidade(v, 'ajudante'),
-        stats.km.toFixed(2),
+        stats.km,
         stats.entregas,
-        stats.ocupacaoPeso.toFixed(2),
+        stats.ocupacaoPeso,
         stats.tempoRotulo,
         v.rotas.map((r) => r.regiao).join(' | '),
         v.observacao || '',
@@ -233,6 +277,75 @@ export function TelaIndicadores() {
         </div>
       </div>
 
+      <div className="mb-4 rounded-xl border bg-card p-4">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <strong className="text-sm">Veículos críticos do dia</strong>
+          <span className="text-xs text-muted-foreground">
+            {criticos.length} veículo(s) · TR 09:10–09:25 com ≥{LIMITE_ENTREGAS} entregas ou
+            {' '}≥{LIMITE_OCUPACAO_PESO}% ocupação · TR fora da faixa = LD/pernoite
+          </span>
+        </div>
+        {criticos.length === 0 ? (
+          <p className="text-sm text-muted-foreground">
+            Nenhum veículo acima dos limites para os filtros atuais.
+          </p>
+        ) : (
+          <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+            {criticos.map(({ v, stats, motivos }) => {
+              const trNaFaixa =
+                stats.tempoMinutos >= TR_CRITICO_MIN && stats.tempoMinutos <= TR_CRITICO_MAX
+              return (
+                <div key={v.chave} className="rounded-lg border border-rose-100 bg-rose-50/50 p-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <b className="text-sm">{v.placa}</b>
+                    <span className="truncate text-[11px] text-muted-foreground">
+                      {v.grupo} · {rotuloTipoVeiculo(v)}
+                    </span>
+                  </div>
+                  <div className="mt-2 grid grid-cols-3 gap-1 text-center">
+                    <div>
+                      <div className="text-[10px] text-muted-foreground">TR</div>
+                      <b
+                        className={`text-sm tabular-nums ${trNaFaixa ? 'text-rose-700' : 'text-foreground'}`}
+                      >
+                        {stats.tempoRotulo}
+                      </b>
+                    </div>
+                    <div>
+                      <div className="text-[10px] text-muted-foreground">Ocupação</div>
+                      <b
+                        className={`text-sm tabular-nums ${stats.ocupacaoPeso >= LIMITE_OCUPACAO_PESO ? 'text-rose-700' : 'text-foreground'}`}
+                      >
+                        {Math.round(stats.ocupacaoPeso)}%
+                      </b>
+                    </div>
+                    <div>
+                      <div className="text-[10px] text-muted-foreground">Entregas</div>
+                      <b
+                        className={`text-sm tabular-nums ${stats.entregas >= LIMITE_ENTREGAS ? 'text-rose-700' : 'text-foreground'}`}
+                      >
+                        {stats.entregas}
+                      </b>
+                    </div>
+                  </div>
+                  <div className="mt-2 flex flex-wrap gap-1">
+                    {motivos.map((m) => (
+                      <Badge
+                        key={m}
+                        variant="outline"
+                        className="border-rose-200 bg-rose-50 text-[10px] font-medium text-rose-700"
+                      >
+                        {m}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </div>
+
       <div className="overflow-hidden rounded-xl border bg-card">
         <div className="flex items-center justify-between border-b p-3">
           <strong className="text-sm">Alertas operacionais</strong>
@@ -240,18 +353,20 @@ export function TelaIndicadores() {
             {alertas.length} veículo(s) com alerta
           </span>
         </div>
-        <div className="max-h-[calc(100dvh-540px)] overflow-auto">
-          <Table>
+        <div className="max-h-[calc(100dvh-540px)] min-h-40 overflow-auto">
+          <Table className="min-w-[1180px]">
             <TableHeader>
               <TableRow>
-                <TableHead>Placa</TableHead>
-                <TableHead>Sala</TableHead>
-                <TableHead>Mapa(s)</TableHead>
-                <TableHead>Motorista escala</TableHead>
-                <TableHead>Motorista fixo</TableHead>
-                <TableHead>Ajudante escala</TableHead>
-                <TableHead>Ajudante fixo</TableHead>
-                <TableHead>Alerta</TableHead>
+                <TableHead className="whitespace-nowrap">Placa</TableHead>
+                <TableHead className="whitespace-nowrap">Sala</TableHead>
+                <TableHead className="whitespace-nowrap">Mapa(s)</TableHead>
+                <TableHead className="whitespace-nowrap">Motorista escala</TableHead>
+                <TableHead className="whitespace-nowrap">Motorista fixo</TableHead>
+                <TableHead className="whitespace-nowrap">Ajudante escala</TableHead>
+                <TableHead className="whitespace-nowrap">Ajudante fixo</TableHead>
+                <TableHead className="sticky right-0 z-20 min-w-56 border-l bg-card px-3 whitespace-nowrap">
+                  Alerta
+                </TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -291,7 +406,23 @@ export function TelaIndicadores() {
                       ? `${v.ajudante_referencia} · ${nomeDe('ajudante', v.ajudante_referencia)}`
                       : '—'}
                   </TableCell>
-                  <TableCell className="text-amber-700">{lista.join(' · ')}</TableCell>
+                  <TableCell className="sticky right-0 z-10 min-w-56 border-l bg-card px-3 whitespace-normal">
+                    <div className="flex flex-wrap gap-1">
+                      {lista.map((item) => (
+                        <Badge
+                          key={item}
+                          variant="outline"
+                          className={`whitespace-normal text-[10px] font-medium leading-tight ${
+                            item.startsWith('Crítico:')
+                              ? 'border-rose-200 bg-rose-50 text-rose-700'
+                              : 'border-amber-200 bg-amber-50 text-amber-800'
+                          }`}
+                        >
+                          {item}
+                        </Badge>
+                      ))}
+                    </div>
+                  </TableCell>
                 </TableRow>
               ))}
             </TableBody>

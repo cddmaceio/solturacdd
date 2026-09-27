@@ -5,6 +5,13 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import {
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -45,6 +52,8 @@ export function TelaVeiculos() {
   const importar = useImportarFidelidade()
 
   const [busca, setBusca] = useState('')
+  const [dispFiltro, setDispFiltro] = useState('ALL')
+  const [tiposSelecionados, setTiposSelecionados] = useState<string[]>([])
   const [dialogo, setDialogo] = useState<{ aberto: boolean; veiculo: Veiculo | null }>({
     aberto: false,
     veiculo: null,
@@ -55,20 +64,35 @@ export function TelaVeiculos() {
   const lista = useMemo(() => {
     const ordenada = ordenarVeiculos(veiculos ?? [])
     const q = norm(busca)
-    if (!q) return ordenada
-    return ordenada.filter((v) =>
-      norm(
+    return ordenada.filter((v) => {
+      if (dispFiltro === 'AVAILABLE' && situacaoDisponibilidade(v.disponibilidade) !== 'ok') return false
+      if (dispFiltro === 'UNAVAILABLE' && situacaoDisponibilidade(v.disponibilidade) !== 'ruim') return false
+      if (tiposSelecionados.length && !tiposSelecionados.includes(tipoNormalizado(v.tipo_veiculo))) return false
+      return !q || norm(
         [
           v.placa,
           v.tipo_veiculo,
           v.frota,
+          v.territorio,
           v.disponibilidade,
           v.motorista_fixo_codigo,
           v.motorista_fixo_nome,
         ].join(' '),
-      ).includes(q),
-    )
-  }, [veiculos, busca])
+      ).includes(q)
+    })
+  }, [veiculos, busca, dispFiltro, tiposSelecionados])
+
+  const tiposDisponiveis = useMemo(
+    () => [...new Set((veiculos ?? []).map((v) => tipoNormalizado(v.tipo_veiculo)))].sort((a, b) => a.localeCompare(b, 'pt-BR')),
+    [veiculos],
+  )
+  const filtrosAtivos = Number(Boolean(busca.trim())) + Number(dispFiltro !== 'ALL') + Number(tiposSelecionados.length > 0)
+
+  function limparFiltros() {
+    setBusca('')
+    setDispFiltro('ALL')
+    setTiposSelecionados([])
+  }
 
   function aoSalvar(dados: { id?: string; veiculo: NovoVeiculo }) {
     salvar.mutate(dados, {
@@ -146,14 +170,54 @@ export function TelaVeiculos() {
 
       <div className="mb-3 flex items-center gap-3 text-sm text-muted-foreground">
         <span>
-          <b className="text-foreground">{veiculos?.length ?? 0}</b> veículo(s) cadastrado(s)
+              <b className="text-foreground">{veiculos?.length ?? 0}</b> veículo(s) cadastrado(s)
         </span>
         {lista.length !== (veiculos?.length ?? 0) && (
           <span>
-            · <b className="text-foreground">{lista.length}</b> exibido(s) com a busca
+            · <b className="text-foreground">{lista.length}</b> exibido(s) com os filtros
           </span>
         )}
         {podeEditar && <span className="ml-auto text-xs">Alterações são salvas no banco</span>}
+      </div>
+
+      <div className="mb-3 flex flex-wrap items-center gap-2 rounded-xl border bg-card px-3 py-2 shadow-sm">
+        <Select value={dispFiltro} onValueChange={setDispFiltro}>
+          <SelectTrigger className="h-9 w-48"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="ALL">Disponibilidade: todas</SelectItem>
+            <SelectItem value="AVAILABLE">Disponíveis</SelectItem>
+            <SelectItem value="UNAVAILABLE">Indisponíveis</SelectItem>
+          </SelectContent>
+        </Select>
+        <div className="flex flex-wrap items-center gap-1" aria-label="Filtrar por tipo de veículo">
+          <span className="mr-1 text-[11px] font-semibold text-muted-foreground">Tipo:</span>
+          {tiposDisponiveis.map((tipo) => {
+            const ativo = tiposSelecionados.includes(tipo)
+            return (
+              <Button
+                key={tipo}
+                type="button"
+                variant={ativo ? 'default' : 'outline'}
+                size="sm"
+                className="h-7 px-2 text-[10px]"
+                aria-pressed={ativo}
+                onClick={() => setTiposSelecionados((atuais) =>
+                  ativo ? atuais.filter((item) => item !== tipo) : [...atuais, tipo],
+                )}
+              >
+                {tipo}
+              </Button>
+            )
+          })}
+        </div>
+        {filtrosAtivos > 0 && (
+          <Button variant="ghost" size="sm" className="h-8 text-xs text-sky-700" onClick={limparFiltros}>
+            Limpar filtros ({filtrosAtivos})
+          </Button>
+        )}
+        <span className="ml-auto text-xs text-muted-foreground">
+          <strong className="text-foreground">{lista.length}</strong> de {veiculos?.length ?? 0} veículos
+        </span>
       </div>
 
       <div className="overflow-hidden rounded-xl border bg-card">
@@ -164,6 +228,7 @@ export function TelaVeiculos() {
                 <TableHead>Placa</TableHead>
                 <TableHead>Tipo</TableHead>
                 <TableHead>Frota</TableHead>
+                <TableHead>Território</TableHead>
                 <TableHead>Disp.</TableHead>
                 <TableHead>Cod. M.</TableHead>
                 <TableHead>Motorista</TableHead>
@@ -173,21 +238,21 @@ export function TelaVeiculos() {
             <TableBody>
               {isLoading && (
                 <TableRow>
-                  <TableCell colSpan={podeEditar ? 7 : 6} className="h-24 text-center text-muted-foreground">
+                  <TableCell colSpan={podeEditar ? 8 : 7} className="h-24 text-center text-muted-foreground">
                     Carregando base…
                   </TableCell>
                 </TableRow>
               )}
               {error && (
                 <TableRow>
-                  <TableCell colSpan={podeEditar ? 7 : 6} className="h-24 text-center text-destructive">
+                  <TableCell colSpan={podeEditar ? 8 : 7} className="h-24 text-center text-destructive">
                     {error.message}
                   </TableCell>
                 </TableRow>
               )}
               {!isLoading && !error && lista.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={podeEditar ? 7 : 6} className="h-24 text-center text-muted-foreground">
+                  <TableCell colSpan={podeEditar ? 8 : 7} className="h-24 text-center text-muted-foreground">
                     Nenhum veículo encontrado.
                   </TableCell>
                 </TableRow>
@@ -201,6 +266,7 @@ export function TelaVeiculos() {
                       <Badge variant="outline">{tipoNormalizado(v.tipo_veiculo)}</Badge>
                     </TableCell>
                     <TableCell>{v.frota || '—'}</TableCell>
+                    <TableCell>{v.territorio || '—'}</TableCell>
                     <TableCell>
                       <span
                         className={

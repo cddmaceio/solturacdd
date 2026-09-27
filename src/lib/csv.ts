@@ -62,13 +62,18 @@ export function cabecalhosCsv(primeiraLinha: string[]): CabecalhosCsv {
   }
 }
 
-/** Gera CSV (;, com BOM) e baixa no navegador. */
+/** Gera CSV (;, com BOM) e baixa no navegador. Números usam vírgula decimal (Excel pt-BR). */
 export function baixarCsv(nomeArquivo: string, linhas: (string | number | null | undefined)[][]) {
-  const csv = linhas
-    .map((linha) =>
-      linha.map((v) => `"${String(v ?? '').replace(/"/g, '""')}"`).join(';'),
-    )
-    .join('\r\n')
+  const celula = (v: string | number | null | undefined): string => {
+    const texto =
+      typeof v === 'number' && Number.isFinite(v)
+        ? Number.isInteger(v)
+          ? String(v)
+          : v.toFixed(2).replace('.', ',')
+        : String(v ?? '')
+    return `"${texto.replace(/"/g, '""')}"`
+  }
+  const csv = linhas.map((linha) => linha.map(celula).join(';')).join('\r\n')
   const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8' })
   const a = document.createElement('a')
   a.href = URL.createObjectURL(blob)

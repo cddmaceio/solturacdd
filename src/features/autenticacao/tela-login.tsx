@@ -16,6 +16,7 @@ import {
 import { obterSupabase } from '@/lib/supabase'
 import { useAuth } from '@/features/autenticacao/auth-provider'
 import { MarcaSoltura } from '@/app/marca'
+import fundoLogin from '../../../bgsitesoltura.png'
 
 export function TelaLogin() {
   const { sessao, carregando, recarregarPerfil } = useAuth()
@@ -55,13 +56,16 @@ export function TelaLogin() {
 
   return (
     <div className="grid min-h-dvh lg:grid-cols-[1.1fr_1fr]">
-      <div className="relative hidden overflow-hidden bg-[#0a1626] p-10 text-white lg:flex lg:flex-col lg:justify-between">
+      <div
+        className="relative hidden overflow-hidden bg-[#0a1626] bg-cover bg-center p-10 text-white lg:flex lg:flex-col lg:justify-between"
+        style={{ backgroundImage: `url(${fundoLogin})` }}
+      >
         <div
           aria-hidden
-          className="absolute inset-0 opacity-70"
+          className="absolute inset-0"
           style={{
             background:
-              'radial-gradient(60rem 40rem at -10% -20%, #14375c 0%, transparent 60%), radial-gradient(50rem 34rem at 110% 115%, #1d2c47 0%, transparent 55%)',
+              'linear-gradient(90deg, rgba(5,14,27,.72) 0%, rgba(5,14,27,.55) 58%, rgba(5,14,27,.34) 100%), linear-gradient(0deg, rgba(5,14,27,.58) 0%, transparent 68%)',
           }}
         />
         <div
@@ -73,17 +77,20 @@ export function TelaLogin() {
             backgroundSize: '56px 56px',
           }}
         />
-        <div className="relative">
-          <MarcaSoltura />
+        <div className="relative flex h-[150px] items-start">
+          <img
+            src="/roni-tech.svg"
+            alt="Roni Tech"
+            className="h-[150px] w-full max-w-[360px] object-contain object-left drop-shadow-[0_12px_28px_rgba(0,70,255,0.2)]"
+          />
         </div>
         <div className="relative max-w-lg">
           <div className="mb-4 h-px w-16 bg-[#e2b53c]" />
           <p className="text-3xl leading-tight font-semibold tracking-tight text-balance">
-            Escala operacional do CDD Maceió, com dados que ficam no banco.
+            Escala operacional do CDD Maceió — veículos, equipes e indicadores em um único painel.
           </p>
           <p className="mt-4 text-sm leading-relaxed text-[#9fb4cc]">
-            Veículos, equipes, PCD, ausências e indicadores em um único painel — com papéis e
-            permissões para cada usuário.
+            PCD, ausências e dados da operação organizados com perfis e permissões para cada usuário.
           </p>
         </div>
         <p className="relative text-xs text-[#6f88a5]">Soltura · CDD Maceió</p>
@@ -101,14 +108,6 @@ export function TelaLogin() {
           }}
         />
         <div aria-hidden className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_50%_28%,rgba(0,89,255,0.16),transparent_58%)]" />
-
-        <div className="relative flex h-[36dvh] min-h-56 max-h-[430px] w-full max-w-3xl items-center justify-center sm:h-[40dvh] lg:h-[42dvh]">
-          <img
-            src="/roni-tech.svg"
-            alt="Roni Tech"
-            className="h-full w-full object-contain drop-shadow-[0_18px_36px_rgba(0,70,255,0.2)]"
-          />
-        </div>
 
         <Card className="relative w-full max-w-sm border-slate-200/80 bg-white shadow-[0_20px_65px_rgba(0,0,0,0.32)]">
           <CardHeader className="space-y-1.5">

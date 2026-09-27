@@ -14,6 +14,8 @@ import {
   AlertTriangle,
   ArrowLeftRight,
   Check,
+  ChevronDown,
+  ChevronUp,
   CircleHelp,
   ClipboardList,
   Printer,
@@ -83,7 +85,7 @@ import {
 } from '@/features/pcd/lib'
 import { code, norm } from '@/lib/texto'
 import { difDiasIso, paraDmy } from '@/lib/datas'
-import type { Colaborador, PapelEquipe } from '@/types/dominio'
+import type { Colaborador, PapelEquipe, PapelSlot } from '@/types/dominio'
 
 // ---------------------------------------------------------------------------
 // Drag & drop
@@ -91,26 +93,40 @@ import type { Colaborador, PapelEquipe } from '@/types/dominio'
 
 /** Colunas do quadro (cabeçalho e linhas usam o mesmo template para alinhar). */
 const COLUNAS_QUADRO =
-  'grid grid-cols-[140px_minmax(300px,1.3fr)_minmax(250px,1fr)_190px_190px_130px_170px]'
+  'grid grid-cols-[140px_minmax(255px,1.15fr)_minmax(205px,0.95fr)_minmax(205px,0.9fr)_minmax(260px,1fr)_110px_160px]'
 
-type CargaArrasto = { papel: PapelEquipe; codigo: string; origem: string | null }
+type CargaArrasto = {
+  papel: PapelEquipe
+  codigo: string
+  nome?: string
+  origem: string | null
+  origemSlot: PapelSlot | null
+}
+
+function papelPessoaDoSlot(slot: PapelSlot): PapelEquipe {
+  return slot === 'motorista' ? 'motorista' : 'ajudante'
+}
 
 function PessoaArrastavel({
   papel,
   codigo,
+  nome,
   origem,
+  origemSlot,
   conteudo,
   className,
 }: {
   papel: PapelEquipe
   codigo: string
+  nome?: string
   origem: string | null
+  origemSlot: PapelSlot | null
   conteudo: React.ReactNode
   className?: string
 }) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
-    id: `pessoa:${papel}:${codigo}:${origem ?? 'pool'}`,
-    data: { papel, codigo, origem } satisfies CargaArrasto,
+    id: `pessoa:${papel}:${codigo}:${origem ?? 'pool'}:${origemSlot ?? 'pool'}`,
+    data: { papel, codigo, nome, origem, origemSlot } satisfies CargaArrasto,
     disabled: !codigo,
   })
   return (
@@ -132,12 +148,14 @@ function SlotAlocacao({
   children,
   onAbrir,
   ativo,
+  compacto = false,
 }: {
-  papel: PapelEquipe
+  papel: PapelSlot
   placa: string
   children: React.ReactNode
   onAbrir: () => void
   ativo: boolean
+  compacto?: boolean
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: `slot:${papel}:${placa}` })
   return (
@@ -147,7 +165,7 @@ function SlotAlocacao({
       role="button"
       tabIndex={0}
       onKeyDown={(e) => e.key === 'Enter' && onAbrir()}
-      className={`min-h-[68px] cursor-pointer rounded-lg border p-2.5 transition-[background-color,border-color,box-shadow] ${
+      className={`${compacto ? 'min-h-[46px] p-2' : 'min-h-[68px] p-2.5'} cursor-pointer rounded-lg border transition-[background-color,border-color,box-shadow] ${
         isOver
           ? 'border-sky-400 bg-sky-50 shadow-[0_0_0_2px_rgba(14,165,233,0.14)]'
           : ativo
@@ -244,8 +262,11 @@ export function TelaEscala() {
   const [buscaPool, setBuscaPool] = useState('')
   const [mostrarOcupados, setMostrarOcupados] = useState(false)
   const [arrastoAtivo, setArrastoAtivo] = useState<CargaArrasto | null>(null)
-  const [modal, setModal] = useState<{ placa: string; papel: PapelEquipe } | null>(null)
+  const [modal, setModal] = useState<{ placa: string; papel: PapelSlot } | null>(null)
   const [buscaModal, setBuscaModal] = useState('')
+  const [modoChapa, setModoChapa] = useState(false)
+  const [chapaCodigo, setChapaCodigo] = useState('')
+  const [chapaNome, setChapaNome] = useState('')
   const [dialogoImpressao, setDialogoImpressao] = useState(false)
   const [impressao, setImpressao] = useState<{ modo: ModoImpressao; selo: number } | null>(null)
   const sequenciaImpressao = useRef(0)
@@ -305,20 +326,41 @@ export function TelaEscala() {
     const vivo = pessoas.find((p) => p.tipo === papel && code(p.codigo) === c)
     if (vivo) return vivo.nome
     for (const l of salvas) {
-      const snapshot = papel === 'motorista' ? l.motorista_nome : l.ajudante_nome
-      const codigoLinha = papel === 'motorista' ? l.motorista_codigo : l.ajudante_codigo
-      if (code(codigoLinha) === c && snapshot) return snapshot
+      const snapshots: [string | null, string | null][] = papel === 'motorista'
+        ? [[l.motorista_codigo, l.motorista_nome]]
+        : [
+            [l.ajudante_codigo, l.ajudante_nome],
+            [l.ajudante2_codigo, l.ajudante2_nome],
+            [l.chapa_codigo, l.chapa_nome],
+          ]
+      for (const [codigoLinha, snapshot] of snapshots) {
+        if (code(codigoLinha) === c && snapshot) return snapshot
+      }
     }
     return ''
   }
 
-  const escaladoEm = (papel: PapelEquipe, codigo: string): string | null => {
+  const localDe = (papel: PapelEquipe, codigo: string): { placa: string; slot: PapelSlot } | null => {
     const c = code(codigo)
     if (!c) return null
-    const achou = veiculos.find(
-      (v) => code(papel === 'motorista' ? v.motorista_codigo : v.ajudante_codigo) === c,
-    )
-    return achou?.chave ?? null
+    for (const v of veiculos) {
+      const slots: PapelSlot[] = papel === 'motorista'
+        ? ['motorista']
+        : ['ajudante', 'ajudante2', 'chapa']
+      const slot = slots.find((s) => {
+        const valor = s === 'motorista' ? v.motorista_codigo
+          : s === 'ajudante' ? v.ajudante_codigo
+            : s === 'ajudante2' ? v.ajudante2_codigo
+              : v.chapa_codigo
+        return code(valor) === c
+      })
+      if (slot) return { placa: v.chave, slot }
+    }
+    return null
+  }
+
+  const escaladoEm = (papel: PapelEquipe, codigo: string): string | null => {
+    return localDe(papel, codigo)?.placa ?? null
   }
 
   const pessoasDoPapel = (papel: PapelEquipe): Colaborador[] =>
@@ -398,6 +440,8 @@ export function TelaEscala() {
             v.base?.tipo_veiculo,
             v.base?.disponibilidade,
             v.base?.motorista_fixo_nome,
+            nomeDe('ajudante', v.ajudante2_codigo),
+            v.chapa_nome,
             ...v.rotas.flatMap((r) => [r.mapa, r.regiao, r.cidades]),
             nomeDe('motorista', v.motorista_codigo),
             nomeDe('ajudante', v.ajudante_codigo),
@@ -480,22 +524,25 @@ export function TelaEscala() {
       return
     }
     if (alvo === 'pool') {
-      if (carga.origem) {
-        limpar.mutate({ placa: carga.origem, papel: carga.papel })
+      if (carga.origem && carga.origemSlot) {
+        limpar.mutate({ placa: carga.origem, slot: carga.origemSlot })
       }
       return
     }
     const [tipo, papelAlvo, placa] = String(alvo).split(':')
     if (tipo !== 'slot' || !papelAlvo || !placa) return
-    if (papelAlvo !== carga.papel) {
-      toast.error(papelAlvo === 'motorista' ? 'Este campo aceita motoristas' : 'Este campo aceita ajudantes')
+    const slot = papelAlvo as PapelSlot
+    if (!['motorista', 'ajudante', 'ajudante2', 'chapa'].includes(slot) || papelPessoaDoSlot(slot) !== carga.papel) {
+      toast.error(papelPessoaDoSlot(slot) === 'motorista' ? 'Este campo aceita motoristas' : 'Este campo aceita ajudantes')
       return
     }
     atribuir.mutate({
       placa,
-      papel: carga.papel,
+      slot,
       codigo: carga.codigo,
+      nome: carga.nome,
       origem: carga.origem,
+      origemSlot: carga.origemSlot,
       pessoas,
     })
   }
@@ -509,21 +556,54 @@ export function TelaEscala() {
     setArrastoAtivo(null)
   }
 
+  function abrirModal(placa: string, papel: PapelSlot) {
+    setModal({ placa, papel })
+    const v = veiculos.find((item) => item.chave === placa)
+    const temChapa = Boolean(v?.chapa_codigo || v?.chapa_nome)
+    setModoChapa(papel === 'ajudante2' && !v?.ajudante2_codigo && temChapa)
+    if ((papel === 'chapa' || papel === 'ajudante2') && v) {
+      setChapaCodigo(v.chapa_codigo)
+      setChapaNome(v.chapa_nome)
+    }
+    setBuscaModal('')
+  }
+
   function selecionarNoModal(codigo: string | null) {
     if (!modal) return
     if (codigo === null) {
-      limpar.mutate({ placa: modal.placa, papel: modal.papel })
+      limpar.mutate({ placa: modal.placa, slot: modal.papel })
     } else {
       atribuir.mutate({
         placa: modal.placa,
-        papel: modal.papel,
+        slot: modal.papel,
         codigo,
-        origem: escaladoEm(modal.papel, codigo),
+        origem: escaladoEm(papelPessoaDoSlot(modal.papel), codigo),
+        origemSlot: localDe(papelPessoaDoSlot(modal.papel), codigo)?.slot,
         pessoas,
       })
     }
     setModal(null)
     setBuscaModal('')
+    setModoChapa(false)
+  }
+
+  function salvarChapa() {
+    if (!modal || (modal.papel !== 'chapa' && !(modal.papel === 'ajudante2' && modoChapa))) return
+    const nome = chapaNome.trim()
+    const codigo = code(chapaCodigo)
+    if (!nome && !codigo) {
+      toast.error('Informe o nome ou código do Chapa/PX')
+      return
+    }
+    atribuir.mutate({
+      placa: modal.placa,
+      slot: 'chapa',
+      codigo,
+      nome,
+      pessoas,
+    })
+    setModal(null)
+    setModoChapa(false)
   }
 
   function restaurar(v: VeiculoEscala) {
@@ -551,16 +631,17 @@ export function TelaEscala() {
   }
 
   const pessoasModal = useMemo(() => {
-    if (!modal) return []
+    if (!modal || modal.papel === 'chapa' || (modal.papel === 'ajudante2' && modoChapa)) return []
     const q = norm(buscaModal)
-    return pessoasDoPapel(modal.papel).filter((p) => {
+    const papel = papelPessoaDoSlot(modal.papel)
+    return pessoasDoPapel(papel).filter((p) => {
       if (!disponivelNaBase(p)) return false
-      if (ausentes.has(`${modal.papel}|${code(p.codigo)}`)) return false
+      if (ausentes.has(`${papel}|${code(p.codigo)}`)) return false
       if (q && !norm(`${p.codigo} ${p.nome}`).includes(q)) return false
       return true
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [modal, buscaModal, pessoas, ausentes])
+  }, [modal, modoChapa, buscaModal, pessoas, ausentes])
 
   if (carregando) {
     return (
@@ -727,7 +808,7 @@ export function TelaEscala() {
                   <div>Mapa / carga</div>
                   <div>Rota</div>
                   <div>Motorista</div>
-                  <div>Ajudante</div>
+                  <div>Equipe de ajudantes</div>
                   <div>Sala</div>
                   <div>Observação</div>
                 </div>
@@ -747,7 +828,7 @@ export function TelaEscala() {
                       pessoas.find((p) => p.tipo === papel && code(p.codigo) === code(codigo))?.status ?? ''
                     }
                     podeEditar={podeEditar}
-                    onAbrirModal={(papel) => setModal({ placa: v.chave, papel })}
+                    onAbrirModal={(papel) => abrirModal(v.chave, papel)}
                     onGrupo={(grupo) => atualizar.mutate({ placa: v.chave, patch: { grupo } })}
                     onObservacao={(observacao) => atualizar.mutate({ placa: v.chave, patch: { observacao } })}
                     onRestaurar={() => restaurar(v)}
@@ -812,13 +893,16 @@ export function TelaEscala() {
                 {pool.map((p) => {
                   const codigo = code(p.codigo)
                   const esc = escaladoEm(papelPool, codigo)
+                  const slotEscalado = localDe(papelPool, codigo)?.slot ?? null
                   const tipoAusencia = ausentes.get(`${papelPool}|${codigo}`)
                   return (
                     <PessoaArrastavel
                       key={p.id}
                       papel={papelPool}
                       codigo={codigo}
+                      nome={p.nome}
                       origem={esc}
+                      origemSlot={slotEscalado}
                       className={`rounded-lg border bg-background px-2.5 py-2 shadow-[0_1px_1px_rgba(15,23,42,0.03)] transition hover:-translate-y-px hover:shadow-sm ${tipoAusencia ? 'border-rose-200 bg-rose-50/70' : esc ? 'border-amber-200 bg-amber-50/60' : 'border-slate-200 hover:border-sky-200'}`}
                       conteudo={
                         <div className="flex items-center gap-2">
@@ -848,55 +932,97 @@ export function TelaEscala() {
 
         {/* Modal de seleção */}
         <Dialog open={Boolean(modal)} onOpenChange={(aberto) => !aberto && setModal(null)}>
-          <DialogContent className="max-w-lg">
+          <DialogContent className="max-h-[calc(100dvh-2rem)] w-full max-w-lg overflow-y-auto sm:max-w-lg">
             <DialogHeader>
               <DialogTitle>
-                {modal?.papel === 'motorista' ? 'Selecionar motorista' : 'Selecionar ajudante'}
+                {modal?.papel === 'ajudante2' && modoChapa
+                  ? 'Cadastrar Chapa / PX'
+                  : modal?.papel === 'motorista'
+                  ? 'Selecionar motorista'
+                  : modal?.papel === 'ajudante2'
+                    ? 'Selecionar segundo ajudante'
+                    : modal?.papel === 'chapa'
+                      ? 'Cadastrar Chapa / PX'
+                      : 'Selecionar ajudante'}
                 {modal ? ` · ${modal.placa}` : ''}
               </DialogTitle>
             </DialogHeader>
-            <button
-              type="button"
-              className="rounded-lg border border-dashed bg-slate-50 px-3 py-2.5 text-left text-sm font-semibold text-slate-700 transition-colors hover:border-rose-200 hover:bg-rose-50 hover:text-rose-800"
-              onClick={() => selecionarNoModal(null)}
-            >
-              — Deixar sem {modal?.papel === 'motorista' ? 'motorista' : 'ajudante'}
-              <div className="text-xs font-normal text-muted-foreground">
-                Remove a pessoa atual do carro
-              </div>
-            </button>
-            <Input
-              autoFocus
-              value={buscaModal}
-              onChange={(e) => setBuscaModal(e.target.value)}
-              placeholder="Buscar por código ou nome…"
-            />
-            <div className="max-h-80 space-y-1 overflow-auto">
-              {pessoasModal.map((p) => {
-                const codigo = code(p.codigo)
-                const esc = escaladoEm(modal!.papel, codigo)
-                return (
-                  <button
-                    key={p.id}
+            {modal?.papel === 'chapa' || (modal?.papel === 'ajudante2' && modoChapa) ? (
+              <>
+                <p className="text-xs text-muted-foreground">Chapa/PX é um trabalhador avulso. Informe o nome e, se houver, o código.</p>
+                <div className="grid min-w-0 gap-3 sm:grid-cols-[140px_minmax(0,1fr)]">
+                  <div className="grid min-w-0 gap-1.5">
+                    <label htmlFor="chapa-codigo" className="text-xs font-medium">Código</label>
+                    <Input id="chapa-codigo" value={chapaCodigo} onChange={(e) => setChapaCodigo(e.target.value)} placeholder="Opcional" />
+                  </div>
+                  <div className="grid min-w-0 gap-1.5">
+                    <label htmlFor="chapa-nome" className="text-xs font-medium">Nome</label>
+                    <Input id="chapa-nome" autoFocus value={chapaNome} onChange={(e) => setChapaNome(e.target.value)} placeholder="Nome do Chapa/PX" />
+                  </div>
+                </div>
+                <div className="flex flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex flex-col gap-2 sm:flex-row">
+                    <Button className="w-full sm:w-auto" variant="outline" onClick={() => selecionarNoModal(null)}>Limpar</Button>
+                    {modal.papel === 'ajudante2' && (
+                      <Button className="w-full sm:w-auto" variant="ghost" onClick={() => setModoChapa(false)}>Ajudante da base</Button>
+                    )}
+                  </div>
+                  <Button className="w-full sm:w-auto" onClick={salvarChapa}>Salvar</Button>
+                </div>
+              </>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  className="rounded-lg border border-dashed bg-slate-50 px-3 py-2.5 text-left text-sm font-semibold text-slate-700 transition-colors hover:border-rose-200 hover:bg-rose-50 hover:text-rose-800"
+                  onClick={() => selecionarNoModal(null)}
+                >
+                  — Deixar sem {modal?.papel === 'motorista' ? 'motorista' : modal?.papel === 'ajudante2' ? 'segundo ajudante' : 'ajudante'}
+                  <div className="text-xs font-normal text-muted-foreground">Remove a pessoa atual deste slot</div>
+                </button>
+                <Input
+                  autoFocus
+                  value={buscaModal}
+                  onChange={(e) => setBuscaModal(e.target.value)}
+                  placeholder="Buscar por código ou nome…"
+                />
+                <div className="max-h-80 space-y-1 overflow-auto">
+                  {pessoasModal.map((p) => {
+                    const codigo = code(p.codigo)
+                    const papelPessoa = papelPessoaDoSlot(modal!.papel)
+                    const esc = escaladoEm(papelPessoa, codigo)
+                    return (
+                      <button
+                        key={p.id}
+                        type="button"
+                        className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-left transition-colors hover:border-sky-300 hover:bg-sky-50/70"
+                        onClick={() => selecionarNoModal(codigo)}
+                      >
+                        <div className="flex items-center gap-2">
+                          <span className="grid h-7 min-w-10 place-items-center rounded-md bg-slate-100 px-1 text-[11px] font-bold tabular-nums text-slate-700">{codigo}</span>
+                          <span className="min-w-0 flex-1 truncate text-sm font-semibold">{p.nome}</span>
+                          {esc && <Badge variant="outline" className="shrink-0 border-amber-200 bg-amber-50 text-[10px] text-amber-800">Escalado</Badge>}
+                        </div>
+                        <div className="mt-1 pl-12 text-[11px] text-muted-foreground">
+                          {p.status ? `${p.status} · ` : ''}{esc ? `Já escalado em ${esc}` : 'Disponível'}
+                        </div>
+                      </button>
+                    )
+                  })}
+                  {pessoasModal.length === 0 && <p className="p-2 text-sm text-muted-foreground">Nenhuma pessoa disponível.</p>}
+                </div>
+                {modal?.papel === 'ajudante2' && (
+                  <Button
                     type="button"
-                   className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-left transition-colors hover:border-sky-300 hover:bg-sky-50/70"
-                   onClick={() => selecionarNoModal(codigo)}
+                    variant="outline"
+                    className="w-full justify-start border-dashed"
+                    onClick={() => setModoChapa(true)}
                   >
-                    <div className="flex items-center gap-2">
-                      <span className="grid h-7 min-w-10 place-items-center rounded-md bg-slate-100 px-1 text-[11px] font-bold tabular-nums text-slate-700">{codigo}</span>
-                      <span className="min-w-0 flex-1 truncate text-sm font-semibold">{p.nome}</span>
-                      {esc && <Badge variant="outline" className="shrink-0 border-amber-200 bg-amber-50 text-[10px] text-amber-800">Escalado</Badge>}
-                    </div>
-                    <div className="mt-1 pl-12 text-[11px] text-muted-foreground">
-                      {p.status ? `${p.status} · ` : ''}{esc ? `Já escalado em ${esc}` : 'Disponível'}
-                    </div>
-                  </button>
-                )
-              })}
-              {pessoasModal.length === 0 && (
-                <p className="p-2 text-sm text-muted-foreground">Nenhuma pessoa disponível.</p>
-              )}
-            </div>
+                    + Usar Chapa/PX neste slot
+                  </Button>
+                )}
+              </>
+            )}
           </DialogContent>
         </Dialog>
 
@@ -963,11 +1089,14 @@ function LinhaVeiculo({
   nomeDe: (papel: PapelEquipe, codigo: string) => string | null
   statusDe: (papel: PapelEquipe, codigo: string) => string
   podeEditar: boolean
-  onAbrirModal: (papel: PapelEquipe) => void
+  onAbrirModal: (papel: PapelSlot) => void
   onGrupo: (grupo: string) => void
   onObservacao: (observacao: string) => void
   onRestaurar: () => void
 }) {
+  const [equipeExpandida, setEquipeExpandida] = useState(
+    () => Boolean(v.ajudante2_codigo || v.chapa_codigo || v.chapa_nome),
+  )
   const stats = estatisticasVeiculo(v)
   const disp = disponibilidade(v)
   const carry = v.isSpot ? null : mapaPendencia(v, dataIso)
@@ -977,6 +1106,18 @@ function LinhaVeiculo({
   const qtdD0 = v.rotas.filter((r) => r.data_entrega === dataIso).length
   const qtdPend = v.rotas.filter((r) => r.data_entrega !== dataIso).length
   const tipo = rotuloTipoVeiculo(v)
+  const equipeExtraResumo = [
+    {
+      slot: 'A2',
+      codigo: code(v.ajudante2_codigo),
+      nome: v.ajudante2_codigo ? nomeDe('ajudante', v.ajudante2_codigo) : '',
+    },
+    {
+      slot: 'Chapa/PX',
+      codigo: code(v.chapa_codigo),
+      nome: v.chapa_nome || (v.chapa_codigo ? nomeDe('ajudante', v.chapa_codigo) : ''),
+    },
+  ].filter((extra) => extra.codigo || extra.nome)
   const statusLinha =
     disp === 'UNAVAILABLE'
       ? 'shadow-[inset_3px_0_0_#e11d48] bg-rose-50/35'
@@ -986,22 +1127,46 @@ function LinhaVeiculo({
           ? 'shadow-[inset_3px_0_0_#059669]'
           : 'shadow-[inset_3px_0_0_#cbd5e1]'
 
-  const renderSlot = (papel: PapelEquipe) => {
-    const codigo = code(papel === 'motorista' ? v.motorista_codigo : v.ajudante_codigo)
-    const nome = codigo ? nomeDe(papel, codigo) : null
-    const fid = fidelidade(v, papel)
-    const fixoCodigo = code(papel === 'motorista' ? v.base?.motorista_fixo_codigo : v.ajudante_referencia)
-    const fixoNome = papel === 'motorista'
+  const renderSlot = (slot: 'motorista' | 'ajudante' | 'ajudante2') => {
+    const papel = papelPessoaDoSlot(slot)
+    const entradas = slot === 'ajudante2'
+      ? [
+          {
+            slot: 'ajudante2' as const,
+            rotulo: 'A2',
+            codigo: code(v.ajudante2_codigo),
+            nome: v.ajudante2_codigo ? nomeDe('ajudante', v.ajudante2_codigo) : '',
+          },
+          {
+            slot: 'chapa' as const,
+            rotulo: 'CHAPA/PX',
+            codigo: code(v.chapa_codigo),
+            nome: v.chapa_nome || (v.chapa_codigo ? nomeDe('ajudante', v.chapa_codigo) : ''),
+          },
+        ].filter((entrada) => entrada.codigo || entrada.nome)
+      : [{
+          slot,
+          rotulo: slot === 'motorista' ? 'MOTORISTA' : 'AJUDANTE',
+          codigo: code(slot === 'motorista' ? v.motorista_codigo : v.ajudante_codigo),
+          nome: slot === 'motorista'
+            ? (v.motorista_codigo ? nomeDe('motorista', v.motorista_codigo) : '')
+            : (v.ajudante_codigo ? nomeDe('ajudante', v.ajudante_codigo) : ''),
+        }].filter((entrada) => entrada.codigo || entrada.nome)
+    const codigo = slot === 'motorista' ? code(v.motorista_codigo) : code(v.ajudante_codigo)
+    const temFidelidade = slot === 'motorista' || slot === 'ajudante'
+    const fid = temFidelidade ? fidelidade(v, papel) : null
+    const fixoCodigo = code(slot === 'motorista' ? v.base?.motorista_fixo_codigo : slot === 'ajudante' ? v.ajudante_referencia : '')
+    const fixoNome = slot === 'motorista'
       ? v.base?.motorista_fixo_nome
-      : nomeDe('ajudante', fixoCodigo)
-    const statusBruto = codigo ? statusDe(papel, codigo) : ''
-    const status = statusBruto && !norm(statusBruto).includes('DISPON') ? statusBruto : ''
-    const ehCarry = papel === 'motorista' && carry && codigo === code(carry.motorista_codigo)
+      : slot === 'ajudante' ? nomeDe('ajudante', fixoCodigo) : ''
+    const ehCarry = slot === 'motorista' && carry && codigo === code(carry.motorista_codigo)
+    const rotuloSlot = slot === 'motorista' ? 'Motorista' : slot === 'ajudante' ? 'Ajudante' : 'Ajudante 2 / Chapa/PX'
 
     return (
-      <div>
-        <div className="mb-1 flex items-center justify-between text-[11px] font-semibold text-muted-foreground">
-          <span className="capitalize">{papel}</span>
+      <div className="min-w-0">
+        <div className={`mb-1 flex items-center justify-between gap-1 font-semibold text-muted-foreground ${slot === 'ajudante2' ? 'text-[10px]' : 'text-[11px]'}`}>
+          <span>{rotuloSlot}</span>
+          {fid && (
             <span
               className={`inline-flex items-center gap-1 ${
                 fid === 'ok'
@@ -1015,45 +1180,70 @@ function LinhaVeiculo({
               {fid === 'ok' ? <Check className="size-3" /> : fid === 'no' ? <ArrowLeftRight className="size-3" /> : <CircleHelp className="size-3" />}
               {fid === 'ok' ? 'Fixo' : fid === 'no' ? 'Troca' : 'S/ ref.'}
             </span>
+          )}
         </div>
         <SlotAlocacao
-          papel={papel}
+          papel={slot}
           placa={v.chave}
-          ativo={Boolean(codigo)}
-          onAbrir={() => podeEditar && onAbrirModal(papel)}
+          ativo={entradas.length > 0}
+          compacto={slot === 'ajudante2'}
+          onAbrir={() => podeEditar && onAbrirModal(slot)}
         >
-          {codigo ? (
-            <PessoaArrastavel
-              papel={papel}
-              codigo={codigo}
-              origem={v.chave}
-              className="flex cursor-grab items-start gap-2 active:cursor-grabbing"
-              conteudo={
-                <>
-                  <span className="grid h-6 min-w-9 shrink-0 place-items-center rounded-md bg-slate-100 px-1 text-[11px] font-bold tabular-nums text-slate-700">{codigo}</span>
+          {entradas.length ? (
+            <div className="space-y-1.5">
+              {entradas.map((entrada) => {
+                const eChapa = entrada.slot === 'chapa'
+                const pessoaSlot = papelPessoaDoSlot(entrada.slot)
+                const statusEntrada = entrada.codigo && !eChapa ? statusDe(pessoaSlot, entrada.codigo) : ''
+                const nomeEntrada = entrada.nome || (entrada.codigo ? 'Código não cadastrado' : 'Nome não informado')
+                const conteudo = (
                   <div className="min-w-0">
-                    <div className="truncate text-[12px] font-semibold leading-5">
-                      {nome || 'Código não cadastrado'}
+                    <div className="flex min-w-0 items-center gap-1.5">
+                      {slot === 'ajudante2' && (
+                        <Badge variant="outline" className={`shrink-0 text-[9px] ${eChapa ? 'border-amber-200 bg-amber-50 text-amber-800' : 'border-slate-200 bg-slate-100 text-slate-700'}`}>
+                          {entrada.rotulo}
+                        </Badge>
+                      )}
+                      {entrada.codigo && <span className="grid h-5 min-w-9 shrink-0 place-items-center rounded bg-slate-100 px-1 text-[10px] font-bold tabular-nums text-slate-700">{entrada.codigo}</span>}
+                      <span className="ml-auto flex min-w-0 items-center gap-1">
+                        {statusEntrada && <span className="max-w-28 truncate text-[9px] text-amber-700">⚠ {statusEntrada}</span>}
+                        {ehCarry && !eChapa && <span className="shrink-0 text-[9px] text-amber-800">↺ Pernoite</span>}
+                      </span>
                     </div>
-                    {status && <div className="text-[11px] text-amber-700">⚠ {status}</div>}
-                    {ehCarry && (
-                      <div className="mt-0.5 inline-flex items-center rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-800">
-                        ↺ Pernoite · mapa {carry?.mapa ?? ''}
-                      </div>
-                    )}
+                    <div
+                      className="mt-0.5 min-w-0 line-clamp-2 break-words text-[12px] font-semibold leading-tight text-slate-800"
+                      title={nomeEntrada}
+                    >
+                      {nomeEntrada}
+                    </div>
                   </div>
-                </>
-              }
-            />
+                )
+                if (!entrada.codigo) return <div key={entrada.slot}>{conteudo}</div>
+                return (
+                  <PessoaArrastavel
+                    key={entrada.slot}
+                    papel="ajudante"
+                    codigo={entrada.codigo}
+                    nome={entrada.nome ?? ''}
+                    origem={v.chave}
+                    origemSlot={entrada.slot}
+                    className="cursor-grab active:cursor-grabbing"
+                    conteudo={conteudo}
+                  />
+                )
+              })}
+            </div>
           ) : (
-            <span className="inline-flex items-center gap-1.5 text-[11px] font-medium text-slate-500"><Users className="size-3.5" /> Solte ou clique para selecionar</span>
+            <span className="inline-flex items-center gap-1.5 text-[10px] font-medium text-slate-500"><Users className="size-3.5" /> Solte ajudante ou clique para escolher</span>
           )}
         </SlotAlocacao>
-        <div className="mt-1.5 truncate text-[10px] text-slate-500" title={fixoCodigo ? `Referência fixa: ${fixoCodigo} · ${fixoNome ?? ''}` : 'Sem referência fixa'}>
-          Ref. fixa: <strong className="font-semibold text-slate-600">
-            {fixoCodigo ? `${fixoCodigo} · ${fixoNome ?? ''}` : '—'}
-          </strong>
-        </div>
+        {temFidelidade && (
+          <div className="mt-1 truncate text-[10px] text-slate-500" title={fixoCodigo ? `Referência fixa: ${fixoCodigo} · ${fixoNome ?? ''}` : 'Sem referência fixa'}>
+            Ref. fixa: <strong className="font-semibold text-slate-600">
+              {fixoCodigo ? `${fixoCodigo} · ${fixoNome ?? ''}` : '—'}
+            </strong>
+          </div>
+        )}
       </div>
     )
   }
@@ -1182,8 +1372,36 @@ function LinhaVeiculo({
       </div>
 
       {renderSlot('motorista')}
-      {renderSlot('ajudante')}
-
+      <div className="min-w-0">
+        {renderSlot('ajudante')}
+        {equipeExpandida && <div className="mt-2">{renderSlot('ajudante2')}</div>}
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          aria-expanded={equipeExpandida}
+          aria-label={equipeExpandida ? `Recolher equipe extra do veículo ${v.placa}` : `Expandir equipe extra do veículo ${v.placa}`}
+          className="mt-1 h-6 gap-1 px-1.5 text-[10px] font-semibold text-sky-700 hover:bg-sky-50 hover:text-sky-800"
+          onClick={() => setEquipeExpandida((aberta) => !aberta)}
+        >
+          {equipeExpandida ? <ChevronUp className="size-3" /> : <ChevronDown className="size-3" />}
+          {equipeExpandida ? 'Recolher' : '+ A2 / Chapa'}
+        </Button>
+        {!equipeExpandida && equipeExtraResumo.length > 0 && (
+          <div className="ml-1 mt-0.5 space-y-0.5">
+            {equipeExtraResumo.map((extra) => (
+              <div
+                key={extra.slot}
+                className="line-clamp-2 break-words text-[9px] leading-tight text-slate-600"
+                title={`${extra.slot}${extra.codigo ? ` · ${extra.codigo}` : ''}${extra.nome ? ` · ${extra.nome}` : ''}`}
+              >
+                <strong className="text-slate-700">{extra.slot}</strong>
+                {extra.codigo ? ` · ${extra.codigo}` : ''}{extra.nome ? ` · ${extra.nome}` : ''}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
       {/* Sala */}
       <Select value={v.grupo} onValueChange={onGrupo} disabled={!podeEditar}>
         <SelectTrigger className="h-8 text-xs">

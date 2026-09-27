@@ -27,6 +27,7 @@ type Formulario = {
   placa: string
   tipo_veiculo: string
   frota: string
+  territorio: string
   disponibilidade: string
   motorista_fixo_codigo: string
   motorista_fixo_nome: string
@@ -36,6 +37,7 @@ const FORM_VAZIO: Formulario = {
   placa: '',
   tipo_veiculo: '',
   frota: '',
+  territorio: '',
   disponibilidade: '',
   motorista_fixo_codigo: '',
   motorista_fixo_nome: '',
@@ -47,6 +49,7 @@ function paraFormulario(veiculo: Veiculo | null): Formulario {
     placa: veiculo.placa,
     tipo_veiculo: veiculo.tipo_veiculo,
     frota: veiculo.frota ?? '',
+    territorio: veiculo.territorio ?? '',
     disponibilidade: veiculo.disponibilidade ?? '',
     motorista_fixo_codigo: veiculo.motorista_fixo_codigo ?? '',
     motorista_fixo_nome: veiculo.motorista_fixo_nome ?? '',
@@ -114,6 +117,7 @@ export function DialogoVeiculo({
         placa,
         tipo_veiculo: form.tipo_veiculo,
         frota: form.frota.trim(),
+        territorio: form.territorio.trim(),
         disponibilidade: form.disponibilidade,
         motorista_fixo_codigo: code(form.motorista_fixo_codigo),
         motorista_fixo_nome: form.motorista_fixo_nome.trim(),
@@ -166,6 +170,15 @@ export function DialogoVeiculo({
               value={form.frota}
               onChange={(e) => alterar('frota', e.target.value)}
               placeholder="Código da frota"
+            />
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor="territorio">Território</Label>
+            <Input
+              id="territorio"
+              value={form.territorio}
+              onChange={(e) => alterar('territorio', e.target.value)}
+              placeholder="Região / território"
             />
           </div>
           <div className="grid gap-2">

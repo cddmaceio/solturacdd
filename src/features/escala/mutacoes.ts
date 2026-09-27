@@ -7,7 +7,7 @@ import { useColaboradores, useEquipes } from '@/features/equipes/api'
 import { usePcdMapas } from '@/features/pcd/api'
 import { useEscalas } from '@/features/escala/api'
 import { montarEscala, paraLinhasPersistencia, type VeiculoEscala } from '@/features/escala/montagem'
-import type { Colaborador, EquipeComPessoas, EscalaLinha, PcdMapa, PapelEquipe, Veiculo } from '@/types/dominio'
+import type { Colaborador, EquipeComPessoas, EscalaLinha, PcdMapa, PapelEquipe, PapelSlot, Veiculo } from '@/types/dominio'
 
 export type EscalaCompleta = {
   veiculos: VeiculoEscala[]
@@ -86,10 +86,32 @@ export function useGarantirEscala(dataIso: string) {
 
 export type AlteracaoSlot = {
   placa: string
-  papel: PapelEquipe
+  slot: PapelSlot
   codigo: string
+  nome?: string
   origem?: string | null
+  origemSlot?: PapelSlot | null
   pessoas: Colaborador[]
+}
+
+type CamposSlot = {
+  papel: PapelEquipe
+  codigo: 'motorista_codigo' | 'ajudante_codigo' | 'ajudante2_codigo' | 'chapa_codigo'
+  nome: 'motorista_nome' | 'ajudante_nome' | 'ajudante2_nome' | 'chapa_nome'
+  manual: 'motorista_manual' | 'ajudante_manual' | 'ajudante2_manual' | 'chapa_manual'
+}
+
+function camposSlot(slot: PapelSlot): CamposSlot {
+  if (slot === 'motorista') {
+    return { papel: 'motorista', codigo: 'motorista_codigo', nome: 'motorista_nome', manual: 'motorista_manual' }
+  }
+  if (slot === 'ajudante2') {
+    return { papel: 'ajudante', codigo: 'ajudante2_codigo', nome: 'ajudante2_nome', manual: 'ajudante2_manual' }
+  }
+  if (slot === 'chapa') {
+    return { papel: 'ajudante', codigo: 'chapa_codigo', nome: 'chapa_nome', manual: 'chapa_manual' }
+  }
+  return { papel: 'ajudante', codigo: 'ajudante_codigo', nome: 'ajudante_nome', manual: 'ajudante_manual' }
 }
 
 /**
@@ -99,23 +121,25 @@ export type AlteracaoSlot = {
 export function useAtribuirPessoa(dataIso: string) {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: async ({ placa, papel, codigo, origem, pessoas }: AlteracaoSlot): Promise<void> => {
+    mutationFn: async ({ placa, slot, codigo, nome, origem, origemSlot, pessoas }: AlteracaoSlot): Promise<void> => {
       const novoCodigo = code(codigo)
-      if (!novoCodigo) return
-      const campo = papel === 'motorista' ? 'motorista_codigo' : 'ajudante_codigo'
-      const campoNome = papel === 'motorista' ? 'motorista_nome' : 'ajudante_nome'
+      const destino = camposSlot(slot)
+      if (!novoCodigo && !(slot === 'chapa' && nome?.trim())) return
       const db = obterSupabase()
 
-      const { data: ausente, error: erroAusencia } = await db
-        .from('ausencias')
-        .select('id')
-        .eq('data', dataIso)
-        .eq('papel', papel)
-        .eq('codigo', novoCodigo)
-        .maybeSingle()
-      if (erroAusencia) throw new Error(erroAusencia.message)
-      if (ausente) {
-        throw new Error('Remova o registro de ausência/folga antes de escalar esta pessoa')
+      const pessoaDaBase = pessoas.find((p) => p.tipo === destino.papel && code(p.codigo) === novoCodigo)
+      if (novoCodigo && (slot !== 'chapa' || pessoaDaBase)) {
+        const { data: ausente, error: erroAusencia } = await db
+          .from('ausencias')
+          .select('id')
+          .eq('data', dataIso)
+          .eq('papel', destino.papel)
+          .eq('codigo', novoCodigo)
+          .maybeSingle()
+        if (erroAusencia) throw new Error(erroAusencia.message)
+        if (ausente) {
+          throw new Error('Remova o registro de ausência/folga antes de escalar esta pessoa')
+        }
       }
 
       const { data: linhas, error: erroLinhas } = await db
@@ -128,41 +152,50 @@ export function useAtribuirPessoa(dataIso: string) {
       const alvo = todas.find((l) => l.veiculo_placa === placa)
       if (!alvo) throw new Error('Veículo não encontrado na escala do dia')
 
-      const nomeDe = (codigoBuscado: string, tipo: PapelEquipe) =>
-        pessoas.find((p) => p.tipo === tipo && code(p.codigo) === codigoBuscado)?.nome ?? ''
+      const origemLinha = origem != null
+        ? todas.find((l) => l.veiculo_placa === origem)
+        : novoCodigo ? todas.find((l) => {
+            if (l.veiculo_placa === placa) return false
+            const codigos = destino.papel === 'motorista'
+              ? [l.motorista_codigo]
+              : [l.ajudante_codigo, l.ajudante2_codigo, l.chapa_codigo]
+            return codigos.some((c) => code(c) === novoCodigo)
+          }) : undefined
+      const slotsOrigemAvaliaveis: PapelSlot[] = destino.papel === 'motorista'
+        ? ['motorista']
+        : ['ajudante', 'ajudante2', 'chapa']
+      const slotOrigemReal = origemSlot ?? (origemLinha
+        ? slotsOrigemAvaliaveis.find((slot) => code(origemLinha[camposSlot(slot).codigo]) === novoCodigo) ?? null
+        : null)
+      const campoOrigem = slotOrigemReal ? camposSlot(slotOrigemReal) : null
 
-      const origemLinha =
-        origem != null
-          ? todas.find((l) => l.veiculo_placa === origem)
-          : todas.find((l) => l.veiculo_placa !== placa && code(l[campo]) === novoCodigo)
+      const antigoCodigo = code(alvo[destino.codigo])
+      const antigoNome = alvo[destino.nome] ?? ''
+      const nomeDestino = nome?.trim() || pessoaDaBase?.nome || ''
+      const atualizacoes = new Map<string, Record<string, string | boolean>>()
+      atualizacoes.set(alvo.id, {
+        [destino.codigo]: novoCodigo,
+        [destino.nome]: nomeDestino,
+        [destino.manual]: true,
+        ...(slot === 'ajudante2'
+          ? { chapa_codigo: '', chapa_nome: '', chapa_manual: true }
+          : slot === 'chapa'
+            ? { ajudante2_codigo: '', ajudante2_nome: '', ajudante2_manual: true }
+            : {}),
+      })
 
-      const antigoCodigo = code(alvo[campo])
-      const antigoNome = alvo[campoNome] ?? ''
-      const campoManual = papel === 'motorista' ? 'motorista_manual' : 'ajudante_manual'
-      const atualizacoes: { id: string; dados: Record<string, string | boolean> }[] = [
-        {
-          id: alvo.id,
-          dados: {
-            [campo]: novoCodigo,
-            [campoNome]: nomeDe(novoCodigo, papel),
-            [campoManual]: true,
-          },
-        },
-      ]
-
-      if (origemLinha && origemLinha.id !== alvo.id) {
-        atualizacoes.push({
-          id: origemLinha.id,
-          dados: {
-            [campo]: antigoCodigo,
-            [campoNome]: antigoCodigo ? antigoNome : '',
-            [campoManual]: true,
-          },
+      if (origemLinha && campoOrigem && (origemLinha.id !== alvo.id || campoOrigem.codigo !== destino.codigo)) {
+        const updateOrigem = atualizacoes.get(origemLinha.id) ?? {}
+        Object.assign(updateOrigem, {
+          [campoOrigem.codigo]: antigoCodigo,
+          [campoOrigem.nome]: antigoCodigo ? antigoNome : '',
+          [campoOrigem.manual]: true,
         })
+        atualizacoes.set(origemLinha.id, updateOrigem)
       }
 
-      for (const u of atualizacoes) {
-        const { error } = await db.from('escalas').update(u.dados).eq('id', u.id)
+      for (const [id, dados] of atualizacoes) {
+        const { error } = await db.from('escalas').update(dados).eq('id', id)
         if (error) throw new Error(error.message)
       }
     },
@@ -176,13 +209,21 @@ export function useAtribuirPessoa(dataIso: string) {
 export function useLimparSlot(dataIso: string) {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: async ({ placa, papel }: { placa: string; papel: PapelEquipe }): Promise<void> => {
-      const campo = papel === 'motorista' ? 'motorista_codigo' : 'ajudante_codigo'
-      const campoNome = papel === 'motorista' ? 'motorista_nome' : 'ajudante_nome'
-      const campoManual = papel === 'motorista' ? 'motorista_manual' : 'ajudante_manual'
+    mutationFn: async ({ placa, slot }: { placa: string; slot: PapelSlot }): Promise<void> => {
+      const campos = camposSlot(slot)
+      const atualizacao = slot === 'ajudante2' || slot === 'chapa'
+        ? {
+            ajudante2_codigo: '',
+            ajudante2_nome: '',
+            ajudante2_manual: true,
+            chapa_codigo: '',
+            chapa_nome: '',
+            chapa_manual: true,
+          }
+        : { [campos.codigo]: '', [campos.nome]: '', [campos.manual]: true }
       const { error } = await obterSupabase()
         .from('escalas')
-        .update({ [campo]: '', [campoNome]: '', [campoManual]: true })
+        .update(atualizacao)
         .eq('data_operacao', dataIso)
         .eq('veiculo_placa', placa)
       if (error) throw new Error(error.message)

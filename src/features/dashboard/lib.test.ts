@@ -44,6 +44,7 @@ function veiculo(placa: string, tipo = 'TRUCK'): Veiculo {
     tipo_veiculo: tipo,
     frota: null,
     disponibilidade: null,
+    territorio: null,
     motorista_fixo_codigo: null,
     motorista_fixo_nome: null,
     ativo: true,

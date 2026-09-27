@@ -1,0 +1,88 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 760" fill="none">
+  <defs>
+    <linearGradient id="metal" x1="475" y1="180" x2="740" y2="510" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#fff"/>
+      <stop offset=".22" stop-color="#dbe5f1"/>
+      <stop offset=".48" stop-color="#71849e"/>
+      <stop offset=".7" stop-color="#f3f6fb"/>
+      <stop offset="1" stop-color="#718098"/>
+    </linearGradient>
+    <linearGradient id="blue" x1="300" y1="120" x2="900" y2="600" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#76e8ff"/>
+      <stop offset=".45" stop-color="#087cff"/>
+      <stop offset="1" stop-color="#123eaa"/>
+    </linearGradient>
+    <linearGradient id="gold" x1="380" y1="160" x2="810" y2="560" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#fff0ae"/>
+      <stop offset=".45" stop-color="#f1bd4a"/>
+      <stop offset="1" stop-color="#a56b13"/>
+    </linearGradient>
+    <linearGradient id="wordmark" x1="310" y1="655" x2="880" y2="655" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#fff"/>
+      <stop offset=".62" stop-color="#c7d2df"/>
+      <stop offset=".63" stop-color="#fff0ae"/>
+      <stop offset="1" stop-color="#e4a929"/>
+    </linearGradient>
+    <radialGradient id="halo" cx="0" cy="0" r="1" gradientTransform="matrix(0 350 -500 0 600 335)" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#0869ff" stop-opacity=".3"/>
+      <stop offset="1" stop-color="#061126" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="glow" x="100" y="40" width="1000" height="650" color-interpolation-filters="sRGB" filterUnits="userSpaceOnUse">
+      <feGaussianBlur stdDeviation="13"/>
+    </filter>
+    <filter id="shadow" x="340" y="70" width="520" height="540" color-interpolation-filters="sRGB" filterUnits="userSpaceOnUse">
+      <feDropShadow dx="0" dy="12" stdDeviation="12" flood-color="#000" flood-opacity=".7"/>
+    </filter>
+    <pattern id="dots" width="34" height="34" patternUnits="userSpaceOnUse">
+      <circle cx="2" cy="2" r="1.2" fill="#3199ff" fill-opacity=".33"/>
+    </pattern>
+  </defs>
+
+  <ellipse cx="600" cy="345" rx="520" ry="360" fill="url(#halo)"/>
+  <path d="M0 0h1200v615H0z" fill="url(#dots)" opacity=".34"/>
+
+  <!-- Quiet circuit traces frame the shield without competing with the mark. -->
+  <g stroke="#087cff" stroke-linecap="round" stroke-linejoin="round" opacity=".68">
+    <path d="M95 265h118l70 70h92M1105 265H987l-70 70h-92M145 400h115l44-44h52M1055 400H940l-44-44h-52" stroke-width="3"/>
+    <path d="M200 180h100l68 68h50M1000 180H900l-68 68h-50M170 482h150l60-60h34M1030 482H880l-60-60h-34" stroke-width="2"/>
+    <path d="M600 25v92m-36-58h72M600 560v50m-45-20h90" stroke-width="3"/>
+  </g>
+  <g fill="#7ceaff" stroke="#087cff" stroke-width="3">
+    <circle cx="95" cy="265" r="6"/><circle cx="1105" cy="265" r="6"/>
+    <circle cx="145" cy="400" r="5"/><circle cx="1055" cy="400" r="5"/>
+    <circle cx="200" cy="180" r="5"/><circle cx="1000" cy="180" r="5"/>
+    <circle cx="170" cy="482" r="5"/><circle cx="1030" cy="482" r="5"/>
+    <circle cx="600" cy="25" r="5"/><circle cx="600" cy="610" r="5"/>
+  </g>
+
+  <!-- Shield silhouette and electric blue edge. -->
+  <path d="M600 80 790 177v153c0 123-76 204-190 256-114-52-190-133-190-256V177L600 80Z" stroke="#087cff" stroke-width="24" opacity=".55" filter="url(#glow)"/>
+  <g filter="url(#shadow)">
+    <path d="M600 90 778 181v148c0 114-69 190-178 241-109-51-178-127-178-241V181L600 90Z" fill="#07101f" stroke="url(#metal)" stroke-width="13"/>
+    <path d="M600 114 755 194v133c0 99-59 166-155 213-96-47-155-114-155-213V194l155-80Z" stroke="url(#gold)" stroke-width="7"/>
+    <path d="M600 136 733 205v120c0 87-50 146-133 188-83-42-133-101-133-188V205l133-69Z" fill="#081a31" stroke="url(#blue)" stroke-width="5"/>
+  </g>
+
+  <!-- Circuit rays behind the monogram. -->
+  <g stroke="url(#blue)" stroke-width="4" stroke-linecap="round" opacity=".95">
+    <path d="M600 142v66m-36-48 20 50m-70-26 45 43m-80-2 65 33m-70 18 67 14M600 142v66m36-48-20 50m70-26-45 43m80-2-65 33m70 18-67 14"/>
+    <path d="M516 375v62l-34 34m202-96v62l34 34M544 422l-30 29m142-29 30 29" opacity=".72"/>
+  </g>
+  <g fill="#65dcff" stroke="#087cff" stroke-width="3">
+    <circle cx="564" cy="161" r="5"/><circle cx="520" cy="187" r="5"/><circle cx="479" cy="218" r="5"/>
+    <circle cx="636" cy="161" r="5"/><circle cx="680" cy="187" r="5"/><circle cx="721" cy="218" r="5"/>
+    <circle cx="482" cy="471" r="5"/><circle cx="718" cy="471" r="5"/>
+  </g>
+
+  <!-- R monogram -->
+  <path d="M526 244h93c57 0 91 30 91 77 0 35-19 60-52 71l67 91h-73l-57-82h-7v82h-62V244Zm62 52v56h29c20 0 31-10 31-28 0-18-11-28-31-28h-29Z" fill="#020916" opacity=".76" transform="translate(5 8)"/>
+  <path d="M526 236h93c57 0 91 30 91 77 0 35-19 60-52 71l67 91h-73l-57-82h-7v82h-62V236Zm62 52v56h29c20 0 31-10 31-28 0-18-11-28-31-28h-29Z" fill="url(#metal)" stroke="#f4f7fb" stroke-width="3" stroke-linejoin="round"/>
+  <path d="M672 463h48l-39-52-27 17 18 35Z" fill="url(#gold)"/>
+
+  <!-- Brand wordmark -->
+  <path d="M240 573h720" stroke="url(#blue)" stroke-width="2" opacity=".9"/>
+  <path d="M296 573h608" stroke="url(#gold)" stroke-width="1" opacity=".85"/>
+  <text x="600" y="658" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="75" font-weight="500" letter-spacing="15" fill="url(#wordmark)">RONI TECH</text>
+  <path d="M360 685h170m140 0h170" stroke="#128dff" stroke-width="2" opacity=".8"/>
+  <path d="M550 685h100l-18 16h-64l-18-16Z" fill="url(#gold)"/>
+</svg>

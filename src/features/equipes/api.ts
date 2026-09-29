@@ -184,30 +184,6 @@ export function useSalvarEquipe() {
           .eq('id', form.id)
         if (error) throw new Error(error.message)
 
-        // Código alterado? A escala de hoje acompanha (regra do legado);
-        // o histórico de datas anteriores permanece intacto.
-        const hoje = new Date().toISOString().slice(0, 10)
-        if (
-          equipeAtual?.codigoAntigoMotorista &&
-          dc &&
-          equipeAtual.codigoAntigoMotorista !== dc
-        ) {
-          const { error: erroEscala } = await db
-            .from('escalas')
-            .update({ motorista_codigo: dc, motorista_nome: dn })
-            .eq('data_operacao', hoje)
-            .eq('motorista_codigo', equipeAtual.codigoAntigoMotorista)
-          if (erroEscala) throw new Error(erroEscala.message)
-        }
-        if (equipeAtual?.codigoAntigoAjudante && hc && equipeAtual.codigoAntigoAjudante !== hc) {
-          const { error: erroEscala } = await db
-            .from('escalas')
-            .update({ ajudante_codigo: hc, ajudante_nome: hn })
-            .eq('data_operacao', hoje)
-            .eq('ajudante_codigo', equipeAtual.codigoAntigoAjudante)
-          if (erroEscala) throw new Error(erroEscala.message)
-        }
-
         // Remove colaboradores de códigos que saíram da linha (hard delete;
         // histórico preservado pelos snapshots em escalas/ausencias)
         const idsNovos = new Set([motoristaId, ajudanteId].filter(Boolean))
@@ -249,29 +225,6 @@ export function useExcluirEquipe() {
   return useMutation({
     mutationFn: async (equipe: EquipeComPessoas): Promise<void> => {
       const db = obterSupabase()
-      const hoje = new Date().toISOString().slice(0, 10)
-
-      const codigoMotorista = code(equipe.motorista?.codigo)
-      const codigoAjudante = code(equipe.ajudante?.codigo)
-
-      // Retira as pessoas da escala de hoje (histórico não é afetado)
-      if (codigoMotorista) {
-        const { error } = await db
-          .from('escalas')
-          .update({ motorista_codigo: '', motorista_nome: '' })
-          .eq('data_operacao', hoje)
-          .eq('motorista_codigo', codigoMotorista)
-        if (error) throw new Error(error.message)
-      }
-      if (codigoAjudante && !CODIGOS_RESERVADOS.has(codigoAjudante)) {
-        const { error } = await db
-          .from('escalas')
-          .update({ ajudante_codigo: '', ajudante_nome: '' })
-          .eq('data_operacao', hoje)
-          .eq('ajudante_codigo', codigoAjudante)
-        if (error) throw new Error(error.message)
-      }
-
       const { error: erroEquipe } = await db.from('equipes').delete().eq('id', equipe.id)
       if (erroEquipe) throw new Error(erroEquipe.message)
 

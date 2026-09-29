@@ -160,8 +160,8 @@ export function DialogoEquipe({
 
         <p className="text-xs leading-relaxed text-muted-foreground">
           Cadastre somente motorista, somente ajudante ou a dupla completa — código e nome sempre
-          juntos. Códigos duplicados são bloqueados. Ao alterar um código já escalado, a escala de
-          hoje acompanha; o histórico permanece intacto.
+          juntos. Códigos duplicados são bloqueados. As escalas salvas preservam os nomes e códigos
+          registrados. Ajustes de alocação são feitos na própria escala.
         </p>
 
         {erro && <p className="text-sm text-destructive">{erro}</p>}

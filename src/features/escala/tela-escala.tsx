@@ -55,7 +55,6 @@ import { useAuth } from '@/features/autenticacao/auth-provider'
 import { exportarEscalaExcel } from '@/features/escala/exportar-excel'
 import { useDataOperacao } from '@/hooks/use-data-operacao'
 import { useAusencias } from '@/features/ausencias/api'
-import { usePcdMapas } from '@/features/pcd/api'
 import { opcoesSala } from '@/features/escala/montagem'
 import {
   useEscalaCompleta,
@@ -68,12 +67,14 @@ import {
 } from '@/features/escala/mutacoes'
 import {
   disponibilidade,
+  destaqueLinha,
   ehMapaCritico,
   estatisticasVeiculo,
   fidelidade,
   mapaPendencia,
   paraLinhasPersistencia,
-  montarEscala,
+  montarReferenciaEscala,
+  chaveMapa,
   rotuloTipoVeiculo,
   type VeiculoEscala,
 } from '@/features/escala/montagem'
@@ -86,7 +87,7 @@ import {
   rotuloFaseMpd,
 } from '@/features/pcd/lib'
 import { code, norm } from '@/lib/texto'
-import { difDiasIso, paraDmy } from '@/lib/datas'
+import { dataHojeIso, difDiasIso, paraDmy } from '@/lib/datas'
 import type { Colaborador, PapelEquipe, PapelSlot } from '@/types/dominio'
 
 // ---------------------------------------------------------------------------
@@ -244,7 +245,6 @@ export function TelaEscala() {
   const podeEditar = pode('escala.editar')
   const { dataIso, definirData } = useDataOperacao()
   const { dados, carregando, erro } = useEscalaCompleta(dataIso)
-  const { data: mapas } = usePcdMapas(dataIso)
   const { data: ausencias } = useAusencias(dataIso)
 
   const garantir = useGarantirEscala(dataIso)
@@ -264,6 +264,7 @@ export function TelaEscala() {
   const [soComMapa, setSoComMapa] = useState(false)
   const [papelPool, setPapelPool] = useState<PapelEquipe>('motorista')
   const [buscaPool, setBuscaPool] = useState('')
+  const [poolRecolhido, setPoolRecolhido] = useState(false)
   const [mostrarOcupados, setMostrarOcupados] = useState(false)
   const [arrastoAtivo, setArrastoAtivo] = useState<CargaArrasto | null>(null)
   const [modal, setModal] = useState<{ placa: string; papel: PapelSlot } | null>(null)
@@ -298,20 +299,18 @@ export function TelaEscala() {
   const garantidoRef = useRef<string | null>(null)
   const { mutate: garantirMutate } = garantir
   useEffect(() => {
-    if (!dados || !podeEditar) return
-    const selo = `${dataIso}|${dados.linhasSalvas.length}|${dados.veiculos.length}`
+    if (!dados || !podeEditar || dataIso < dataHojeIso()) return
+    const faltantes = dados.veiculos.filter((v) => {
+      const salva = dados.linhasSalvas.find((l) => norm(l.veiculo_placa) === norm(v.chave))
+      if (!salva?.snapshot) return true
+      const existentes = new Set(salva.snapshot.rotas.map(chaveMapa))
+      return v.rotas.some((m) => !existentes.has(chaveMapa(m)))
+    })
+    if (!faltantes.length) return
+    const selo = JSON.stringify([dataIso, faltantes.map((v) => [v.chave, v.rotas.map(chaveMapa)])])
     if (garantidoRef.current === selo) return
     garantidoRef.current = selo
-    const faltantes = dados.veiculos.filter(
-      (v) => !dados.linhasSalvas.some((l) => l.veiculo_placa === v.chave),
-    )
-    if (faltantes.length) {
-      garantirMutate({
-        veiculos: dados.veiculos,
-        pessoas: dados.pessoas,
-        linhasSalvas: dados.linhasSalvas,
-      })
-    }
+    garantirMutate({ veiculos: dados.veiculos, pessoas: dados.pessoas, linhasSalvas: dados.linhasSalvas })
   }, [dados, dataIso, podeEditar, garantirMutate])
 
   const veiculos = useMemo(() => dados?.veiculos ?? [], [dados])
@@ -327,8 +326,6 @@ export function TelaEscala() {
   const nomeDe = (papel: PapelEquipe, codigo: string): string | null => {
     const c = code(codigo)
     if (!c) return null
-    const vivo = pessoas.find((p) => p.tipo === papel && code(p.codigo) === c)
-    if (vivo) return vivo.nome
     for (const l of salvas) {
       const snapshots: [string | null, string | null][] = papel === 'motorista'
         ? [[l.motorista_codigo, l.motorista_nome]]
@@ -341,7 +338,7 @@ export function TelaEscala() {
         if (code(codigoLinha) === c && snapshot) return snapshot
       }
     }
-    return ''
+    return pessoas.find((p) => p.tipo === papel && code(p.codigo) === c)?.nome ?? ''
   }
 
   const localDe = (papel: PapelEquipe, codigo: string): { placa: string; slot: PapelSlot } | null => {
@@ -377,8 +374,9 @@ export function TelaEscala() {
 
   // ------------------------------------------------------------------ KPIs
   const kpis = useMemo(() => {
-    const d0 = (mapas ?? []).filter((m) => m.data_entrega === dataIso)
-    const pendencias = (mapas ?? []).filter((m) => pendenciaAnterior(m, dataIso))
+    const mapas = veiculos.flatMap((v) => v.rotas)
+    const d0 = mapas.filter((m) => m.data_entrega === dataIso)
+    const pendencias = mapas.filter((m) => pendenciaAnterior(m, dataIso))
     const fixos = veiculos.filter((v) => !v.isSpot)
     const carregados = veiculos.filter((v) => v.carregado)
     const comFixo = carregados.filter(
@@ -419,7 +417,7 @@ export function TelaEscala() {
       indisponiveis,
       semMapa,
     }
-  }, [mapas, dataIso, veiculos])
+  }, [dataIso, veiculos])
 
   // --------------------------------------------------------------- Filtros
   const visiveis = useMemo(() => {
@@ -612,10 +610,10 @@ export function TelaEscala() {
 
   function restaurar(v: VeiculoEscala) {
     if (!dados) return
-    const recomputada = montarEscala({
+    const recomputada = montarReferenciaEscala({
       dataIso,
-      veiculos: dados.entradas.veiculosBase,
-      mapas: dados.entradas.mapas,
+      veiculos: veiculos.flatMap((item) => item.base ? [item.base] : []),
+      mapas: veiculos.flatMap((item) => item.rotas),
       pessoas: dados.entradas.pessoas,
       equipes: dados.entradas.equipes,
       salvas: salvas.filter((l) => l.veiculo_placa !== v.chave),
@@ -668,6 +666,28 @@ export function TelaEscala() {
       onDragCancel={() => setArrastoAtivo(null)}
     >
       <div>
+        {salvas.some((s) => !s.snapshot) && (
+          <p className="p-3 text-sm text-amber-800" role="status">
+            Histórico incompleto: esta escala possui registros antigos sem cópia dos mapas originais.
+          </p>
+        )}
+        {salvas.some((s) => s.snapshot?.recuperado) && (
+          <p className="p-3 text-sm text-amber-800" role="status">
+            Esta escala contém pernoite recuperado a partir do PCD e da confirmação do supervisor.
+            A fase exata do mapa no momento da escala não estava arquivada.
+          </p>
+        )}
+        {dataIso < dataHojeIso() && !salvas.length && (
+          <p className="p-3 text-sm text-muted-foreground">Não há escala arquivada para esta data.</p>
+        )}
+        {garantir.isError && (
+          <div className="p-3 text-sm text-destructive" role="alert">
+            Não foi possível salvar as inclusões da escala. {garantir.error.message}
+            <Button variant="outline" onClick={() => garantir.mutate({ veiculos, pessoas, linhasSalvas: salvas })}>
+              Tentar novamente
+            </Button>
+          </div>
+        )}
         <CabecalhoPagina
           titulo="Escala do Dia"
           descricao="Equipe por veículo com mapa do dia, pernoite e fidelização da frota fixa."
@@ -832,7 +852,7 @@ export function TelaEscala() {
                 )}
                 {visiveis.map((v) => (
                   <LinhaVeiculo
-                    key={v.chave}
+                    key={`${dataIso}|${v.chave}`}
                     v={v}
                     dataIso={dataIso}
                     salas={salas}
@@ -852,19 +872,34 @@ export function TelaEscala() {
           </div>
 
           {/* Pool de pessoas */}
-          <div className="rounded-xl border bg-card">
+          <div className="self-start rounded-xl border bg-card">
             <div className="border-b p-3">
               <div className="flex items-center justify-between gap-2">
                 <h3 className="text-sm font-bold tracking-tight">Equipe disponível</h3>
-                <Badge variant="secondary" className="h-5 px-1.5 text-[10px]">{resumoPool.disponiveis} disp.</Badge>
+                <div className="flex items-center gap-1">
+                  <Badge variant="secondary" className="h-5 px-1.5 text-[10px]">{resumoPool.disponiveis} disp.</Badge>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    aria-expanded={!poolRecolhido}
+                    aria-controls="conteudo-equipe-disponivel"
+                    aria-label={poolRecolhido ? 'Expandir equipe disponível' : 'Recolher equipe disponível'}
+                    title={poolRecolhido ? 'Expandir equipe disponível' : 'Recolher equipe disponível'}
+                    onClick={() => setPoolRecolhido((recolhido) => !recolhido)}
+                  >
+                    {poolRecolhido ? <ChevronDown className="size-4" /> : <ChevronUp className="size-4" />}
+                  </Button>
+                </div>
               </div>
-              <p className="text-xs text-muted-foreground">
+              <p hidden={poolRecolhido} className="text-xs text-muted-foreground">
                 Arraste para o slot ou clique no slot para escolher.
               </p>
               <p className="mt-1 text-[10px] text-muted-foreground">
                 {resumoPool.escalados} escalados <span className="px-1 text-slate-300">·</span> {resumoPool.ausentes} ausentes
               </p>
             </div>
+            <div id="conteudo-equipe-disponivel" hidden={poolRecolhido}>
             <div className="flex gap-1 border-b px-3 py-2">
               {(['motorista', 'ajudante'] as const).map((p) => (
                 <Button
@@ -939,6 +974,7 @@ export function TelaEscala() {
                   )
                 })}
               </AreaSoltarPool>
+            </div>
             </div>
           </div>
         </div>
@@ -1084,7 +1120,7 @@ function AreaSoltarPool({ children, mostrarDica }: { children: React.ReactNode; 
 // Linha do veículo
 // ---------------------------------------------------------------------------
 
-function LinhaVeiculo({
+export function LinhaVeiculo({
   v,
   dataIso,
   salas,
@@ -1110,6 +1146,13 @@ function LinhaVeiculo({
   const [equipeExpandida, setEquipeExpandida] = useState(
     () => Boolean(v.ajudante2_codigo || v.chapa_codigo || v.chapa_nome),
   )
+  const [ajudanteRecolhido, setAjudanteRecolhido] = useState(false)
+  const somenteChapa = Boolean(v.chapa_codigo || v.chapa_nome) && !code(v.ajudante_codigo) && !code(v.ajudante2_codigo)
+  const destaque = destaqueLinha(v, dataIso)
+  const fundoLinha = destaque === 'pernoite' ? 'bg-yellow-100 hover:bg-yellow-200/70'
+    : destaque === 'gradativa' ? 'bg-orange-100 hover:bg-orange-200/70'
+      : destaque === 'noturna' ? 'bg-slate-200 hover:bg-slate-300/70'
+        : 'hover:bg-slate-50/80'
   const stats = estatisticasVeiculo(v)
   const disp = disponibilidade(v)
   const carry = v.isSpot ? null : mapaPendencia(v, dataIso)
@@ -1133,9 +1176,9 @@ function LinhaVeiculo({
   ].filter((extra) => extra.codigo || extra.nome)
   const statusLinha =
     disp === 'UNAVAILABLE'
-      ? 'shadow-[inset_3px_0_0_#e11d48] bg-rose-50/35'
+      ? 'shadow-[inset_3px_0_0_#e11d48]'
       : v.carregado && !code(v.motorista_codigo)
-        ? 'shadow-[inset_3px_0_0_#d97706] bg-amber-50/45'
+        ? 'shadow-[inset_3px_0_0_#d97706]'
         : v.carregado && code(v.motorista_codigo)
           ? 'shadow-[inset_3px_0_0_#059669]'
           : 'shadow-[inset_3px_0_0_#cbd5e1]'
@@ -1171,7 +1214,7 @@ function LinhaVeiculo({
     const fixoCodigo = code(slot === 'motorista' ? v.base?.motorista_fixo_codigo : slot === 'ajudante' ? v.ajudante_referencia : '')
     const fixoNome = slot === 'motorista'
       ? v.base?.motorista_fixo_nome
-      : slot === 'ajudante' ? nomeDe('ajudante', fixoCodigo) : ''
+      : slot === 'ajudante' ? v.ajudante_referencia_nome ?? nomeDe('ajudante', fixoCodigo) : ''
     const ehCarry = slot === 'motorista' && carry && codigo === code(carry.motorista_codigo)
     const rotuloSlot = slot === 'motorista' ? 'Motorista' : slot === 'ajudante' ? 'Ajudante' : 'Ajudante 2 / Chapa/PX'
 
@@ -1263,7 +1306,8 @@ function LinhaVeiculo({
 
   return (
     <div
-      className={`${COLUNAS_QUADRO} ${statusLinha} gap-2 border-b border-slate-100 px-3 py-3 transition-colors hover:bg-slate-50/80 last:border-b-0`}
+      data-destaque={destaque}
+      className={`${COLUNAS_QUADRO} ${statusLinha} ${fundoLinha} gap-2 border-b border-slate-100 px-3 py-3 transition-colors last:border-b-0`}
     >
       {/* Veículo */}
       <div>
@@ -1386,9 +1430,18 @@ function LinhaVeiculo({
 
       {renderSlot('motorista')}
       <div className="min-w-0">
-        {renderSlot('ajudante')}
-        {equipeExpandida && <div className="mt-2">{renderSlot('ajudante2')}</div>}
-        <Button
+        {(!somenteChapa || !ajudanteRecolhido) && renderSlot('ajudante')}
+        {(somenteChapa || equipeExpandida) && <div className="mt-2">{renderSlot('ajudante2')}</div>}
+        {somenteChapa ? (
+          <Button type="button" variant="ghost" size="sm"
+            aria-expanded={!ajudanteRecolhido}
+            aria-label={`${ajudanteRecolhido ? 'Mostrar' : 'Recolher'} campo do ajudante do veículo ${v.placa}`}
+            className="mt-1 h-6 gap-1 px-1.5 text-[10px] font-semibold text-sky-700"
+            onClick={() => setAjudanteRecolhido((valor) => !valor)}>
+            {ajudanteRecolhido ? <ChevronDown className="size-3" /> : <ChevronUp className="size-3" />}
+            {ajudanteRecolhido ? '+ Ajudante' : 'Recolher ajudante'}
+          </Button>
+        ) : <Button
           type="button"
           variant="ghost"
           size="sm"
@@ -1399,8 +1452,8 @@ function LinhaVeiculo({
         >
           {equipeExpandida ? <ChevronUp className="size-3" /> : <ChevronDown className="size-3" />}
           {equipeExpandida ? 'Recolher' : '+ A2 / Chapa'}
-        </Button>
-        {!equipeExpandida && equipeExtraResumo.length > 0 && (
+        </Button>}
+        {!somenteChapa && !equipeExpandida && equipeExtraResumo.length > 0 && (
           <div className="ml-1 mt-0.5 space-y-0.5">
             {equipeExtraResumo.map((extra) => (
               <div

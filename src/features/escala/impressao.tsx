@@ -8,7 +8,7 @@ import {
 import { code } from '@/lib/texto'
 import { paraDmy, rotuloDiaRelativo } from '@/lib/datas'
 import { rotuloFaseMpd } from '@/features/pcd/lib'
-import type { VeiculoEscala } from '@/features/escala/montagem'
+import { destaqueLinha, type VeiculoEscala } from '@/features/escala/montagem'
 import type { PapelEquipe } from '@/types/dominio'
 
 /** Opções do diálogo de impressão (fiel ao legado). */
@@ -89,7 +89,7 @@ function TabelaImpressao({
       </thead>
       <tbody>
         {veiculos.map((v) => (
-          <tr key={v.chave}>
+          <tr key={v.chave} data-destaque={destaqueLinha(v, dataIso)}>
             {comSala && <td className="strong">{v.grupo || 'OUTROS'}</td>}
             <td className="strong">{v.placa}</td>
             <td>{v.base?.frota || '—'}</td>

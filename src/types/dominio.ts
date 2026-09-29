@@ -105,6 +105,15 @@ export type PcdMapa = {
 }
 
 export type EscalaLinha = {
+  snapshot?: {
+    versao: 1
+    base: Veiculo | null
+    isSpot: boolean
+    ajudante_referencia: string
+    ajudante_referencia_nome?: string
+    recuperado?: boolean
+    rotas: PcdMapa[]
+  } | null
   id: string
   data_operacao: string
   veiculo_placa: string

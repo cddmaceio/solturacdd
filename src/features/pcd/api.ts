@@ -10,14 +10,21 @@ export function usePcdMapas(dataLimiteIso: string) {
   return useQuery({
     queryKey: ['pcd_mapas', dataLimiteIso],
     queryFn: async (): Promise<PcdMapa[]> => {
-      const { data, error } = await obterSupabase()
-        .from('pcd_mapas')
-        .select('*')
-        .lte('data_entrega', dataLimiteIso)
-        .order('data_entrega', { ascending: false })
-        .order('mapa', { ascending: true })
-      if (error) throw new Error(error.message)
-      return (data ?? []) as PcdMapa[]
+      const linhas: PcdMapa[] = []
+      // O histórico pode ultrapassar o limite de 1.000 registros do PostgREST.
+      for (let inicio = 0; ; inicio += 1000) {
+        const { data, error } = await obterSupabase()
+          .from('pcd_mapas')
+          .select('*')
+          .lte('data_entrega', dataLimiteIso)
+          .order('data_entrega', { ascending: false })
+          .order('mapa', { ascending: true })
+          .order('id', { ascending: true })
+          .range(inicio, inicio + 999)
+        if (error) throw new Error(error.message)
+        linhas.push(...((data ?? []) as PcdMapa[]))
+        if ((data?.length ?? 0) < 1000) return linhas
+      }
     },
   })
 }

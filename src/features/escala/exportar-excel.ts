@@ -1,5 +1,5 @@
 import { code } from '@/lib/texto'
-import { estatisticasVeiculo, fidelidade, rotuloTipoVeiculo, type VeiculoEscala } from './montagem'
+import { destaqueLinha, estatisticasVeiculo, fidelidade, rotuloTipoVeiculo, type VeiculoEscala } from './montagem'
 import type { PapelEquipe } from '@/types/dominio'
 
 type NomeDe = (papel: PapelEquipe, codigo: string) => string | null
@@ -26,7 +26,7 @@ export async function exportarEscalaExcel(dataIso: string, veiculos: VeiculoEsca
   for (const v of veiculos) {
     const stats = estatisticasVeiculo(v)
     const pessoa = (papel: PapelEquipe, codigo: string) => code(codigo) ? nomeDe(papel, codigo) ?? '' : ''
-    aba.addRow([
+    const linha = aba.addRow([
       dataIso, v.grupo, rotuloTipoVeiculo(v), v.placa,
       v.isSpot ? 'SPOT' : v.base?.frota ?? '',
       v.rotas.map((r) => r.mapa).join(' | '),
@@ -36,11 +36,14 @@ export async function exportarEscalaExcel(dataIso: string, veiculos: VeiculoEsca
       code(v.ajudante2_codigo), pessoa('ajudante', v.ajudante2_codigo),
       code(v.chapa_codigo), v.chapa_nome || pessoa('ajudante', v.chapa_codigo),
       v.base?.motorista_fixo_nome ?? '',
-      pessoa('ajudante', v.ajudante_referencia),
+      v.ajudante_referencia_nome ?? pessoa('ajudante', v.ajudante_referencia),
       fidelidade(v, 'motorista'), fidelidade(v, 'ajudante'),
       stats.km, stats.entregas, stats.ocupacaoPeso, stats.tempoRotulo,
       v.rotas.map((r) => r.regiao).filter(Boolean).join(' | '), v.observacao,
     ])
+    const destaque = destaqueLinha(v, dataIso)
+    const cor = destaque === 'pernoite' ? 'FFFEF9C3' : destaque === 'gradativa' ? 'FFFFEDD5' : destaque === 'noturna' ? 'FFE2E8F0' : null
+    if (cor) linha.eachCell((celula) => { celula.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: cor } } })
   }
 
   const buffer = await workbook.xlsx.writeBuffer()

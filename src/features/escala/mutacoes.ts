@@ -1,12 +1,13 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { obterSupabase } from '@/lib/supabase'
-import { code } from '@/lib/texto'
+import { code, norm } from '@/lib/texto'
+import { dataHojeIso } from '@/lib/datas'
 import { useVeiculos } from '@/features/veiculos/api'
 import { useColaboradores, useEquipes } from '@/features/equipes/api'
 import { usePcdMapas } from '@/features/pcd/api'
 import { useEscalas } from '@/features/escala/api'
-import { montarEscala, paraLinhasPersistencia, type VeiculoEscala } from '@/features/escala/montagem'
+import { montarEscala, montarReferenciaEscala, paraLinhasPersistencia, type VeiculoEscala } from '@/features/escala/montagem'
 import type { Colaborador, EquipeComPessoas, EscalaLinha, PcdMapa, PapelEquipe, PapelSlot, Veiculo } from '@/types/dominio'
 
 export type EscalaCompleta = {
@@ -52,7 +53,7 @@ export function useEscalaCompleta(dataIso: string) {
   return { dados, carregando, erro }
 }
 
-/** Congela a escala da data: insere apenas as placas ainda ausentes. */
+/** Acrescenta veículos e mapas em transação, preservando o arquivo e ajustes salvos. */
 export function useGarantirEscala(dataIso: string) {
   const qc = useQueryClient()
   return useMutation({
@@ -61,26 +62,26 @@ export function useGarantirEscala(dataIso: string) {
       pessoas: Colaborador[]
       linhasSalvas: EscalaLinha[]
     }): Promise<number> => {
-      const presentes = new Set(entrada.linhasSalvas.map((l) => l.veiculo_placa))
-      const faltantes = paraLinhasPersistencia(
-        entrada.veiculos.filter((v) => !presentes.has(v.chave)),
-        dataIso,
-        entrada.pessoas,
-      )
-      for (let i = 0; i < faltantes.length; i += 300) {
-        const { error } = await obterSupabase()
-          .from('escalas')
-          .upsert(faltantes.slice(i, i + 300), {
-            onConflict: 'data_operacao,veiculo_placa',
-            ignoreDuplicates: true,
-          })
-        if (error) throw new Error(error.message)
+      const linhas = paraLinhasPersistencia(entrada.veiculos, dataIso, entrada.pessoas)
+      for (const linha of linhas) {
+        const salva = entrada.linhasSalvas.find((s) => norm(s.veiculo_placa) === norm(linha.veiculo_placa))
+        if (!salva) continue
+        for (const slot of ['motorista', 'ajudante', 'ajudante2', 'chapa'] as const) {
+          if (code(linha[`${slot}_codigo`]) === code(salva[`${slot}_codigo`])) {
+            linha[`${slot}_nome`] = salva[`${slot}_nome`]
+          }
+        }
       }
-      return faltantes.length
+      const { data, error } = await obterSupabase().rpc('sincronizar_escala', {
+        p_data: dataIso, p_hoje: dataHojeIso(), p_linhas: linhas,
+      })
+      if (error) throw new Error(error.message)
+      return Number(data)
     },
-    onSettled: () => {
+    onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['escalas', dataIso] })
     },
+    onError: (e) => toast.error(`Falha ao salvar a escala: ${e.message}`),
   })
 }
 
@@ -246,7 +247,7 @@ export function useAtualizarLinha(dataIso: string) {
     }): Promise<void> => {
       const { error } = await obterSupabase()
         .from('escalas')
-        .update(patch)
+        .update({ ...(patch.grupo !== undefined ? { sala: patch.grupo } : {}), ...(patch.observacao !== undefined ? { observacao: patch.observacao } : {}) })
         .eq('data_operacao', dataIso)
         .eq('veiculo_placa', placa)
       if (error) throw new Error(error.message)
@@ -275,7 +276,7 @@ export function useRestaurarVeiculo(dataIso: string) {
     }): Promise<void> => {
       const { error } = await obterSupabase()
         .from('escalas')
-        .update(dados)
+        .update(camposEquipe(dados))
         .eq('data_operacao', dataIso)
         .eq('veiculo_placa', placa)
       if (error) throw new Error(error.message)
@@ -288,7 +289,7 @@ export function useRestaurarVeiculo(dataIso: string) {
   })
 }
 
-/** Restaura o dia inteiro: descarta ajustes e recalcula a montagem (admin). */
+/** Restaura as equipes do dia, preservando os mapas arquivados (admin). */
 export function useRestaurarDia(dataIso: string) {
   const qc = useQueryClient()
   return useMutation({
@@ -299,25 +300,23 @@ export function useRestaurarDia(dataIso: string) {
       equipes: EquipeComPessoas[]
     }): Promise<number> => {
       const db = obterSupabase()
-      const linhas = paraLinhasPersistencia(
-        montarEscala({
-          dataIso,
-          veiculos: entrada.veiculosBase,
-          mapas: entrada.mapas,
-          pessoas: entrada.pessoas,
-          equipes: entrada.equipes,
-          salvas: [],
-        }),
-        dataIso,
-        entrada.pessoas,
-      )
-      const { error: erroDelete } = await db.from('escalas').delete().eq('data_operacao', dataIso)
-      if (erroDelete) throw new Error(erroDelete.message)
-      for (let i = 0; i < linhas.length; i += 300) {
-        const { error } = await db.from('escalas').insert(linhas.slice(i, i + 300))
-        if (error) throw new Error(error.message)
-      }
-      return linhas.length
+      const { data: salvas, error: erroLeitura } = await db.from('escalas').select('*').eq('data_operacao', dataIso)
+      if (erroLeitura) throw new Error(erroLeitura.message)
+      const arquivo = montarEscala({ dataIso,
+        veiculos: entrada.veiculosBase, mapas: entrada.mapas, pessoas: entrada.pessoas,
+        equipes: entrada.equipes, salvas: (salvas ?? []) as EscalaLinha[],
+      })
+      const referencia = montarReferenciaEscala({
+        dataIso, veiculos: arquivo.flatMap((v) => v.base ? [v.base] : []),
+        mapas: arquivo.flatMap((v) => v.rotas), pessoas: entrada.pessoas,
+        equipes: entrada.equipes, salvas: [],
+      })
+      const linhas = paraLinhasPersistencia(referencia, dataIso, entrada.pessoas)
+      const { data, error } = await db.rpc('sincronizar_escala', {
+        p_data: dataIso, p_hoje: dataHojeIso(), p_linhas: linhas, p_restaurar: true,
+      })
+      if (error) throw new Error(error.message)
+      return Number(data)
     },
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['escalas', dataIso] })
@@ -325,4 +324,12 @@ export function useRestaurarDia(dataIso: string) {
     },
     onError: (e) => toast.error(e.message),
   })
+}
+
+/** O comando de restaurar equipe não modifica mapas, data ou placa. */
+function camposEquipe(dados: LinhaRestaurada) {
+  return Object.fromEntries(Object.entries(dados).filter(([campo]) =>
+    /^(motorista|ajudante|ajudante2|chapa)_(codigo|nome|manual)$/.test(campo) ||
+    campo === 'sala' || campo === 'observacao',
+  ))
 }

@@ -82,6 +82,7 @@ function montar(opcoes: {
 }) {
   return montarEscala({
     dataIso: DATA,
+    hojeIso: DATA,
     veiculos: opcoes.veiculos ?? [],
     mapas: opcoes.mapas ?? [],
     pessoas: opcoes.pessoas ?? [],
@@ -231,7 +232,7 @@ describe('montarEscala', () => {
     expect(porPlaca(veiculos, 'ABC1D23').rotas).toHaveLength(0)
   })
 
-  it('resolve conflito: pessoa em dois veículos fica só no de maior prioridade (D0)', () => {
+  it('preserva alocações legadas sem apagar silenciosamente uma duplicidade salva', () => {
     const veiculos = montar({
       veiculos: [veiculo('JJJ1J10'), veiculo('KKK1K20')],
       mapas: [
@@ -245,7 +246,7 @@ describe('montarEscala', () => {
       ],
     })
     expect(porPlaca(veiculos, 'JJJ1J10').motorista_codigo).toBe('50')
-    expect(porPlaca(veiculos, 'KKK1K20').motorista_codigo).toBe('')
+    expect(porPlaca(veiculos, 'KKK1K20').motorista_codigo).toBe('50')
   })
 
   it('preserva ajustes salvos (grupo, observação e equipe)', () => {

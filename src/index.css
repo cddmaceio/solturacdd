@@ -419,6 +419,10 @@
         page-break-inside: avoid;
     }
 
+    .print-table tbody tr[data-destaque="pernoite"] td { background: #fef9c3; }
+    .print-table tbody tr[data-destaque="gradativa"] td { background: #ffedd5; }
+    .print-table tbody tr[data-destaque="noturna"] td { background: #e2e8f0; }
+
     .print-footer {
         display: flex;
         justify-content: space-between;

@@ -13,7 +13,12 @@ export function paraDmy(iso: string): string {
 }
 
 export function dataHojeDmy(): string {
-  return paraDmy(new Date().toISOString().slice(0, 10))
+  return paraDmy(dataHojeIso())
+}
+
+export function dataHojeIso(): string {
+  const agora = new Date()
+  return `${agora.getFullYear()}-${String(agora.getMonth() + 1).padStart(2, '0')}-${String(agora.getDate()).padStart(2, '0')}`
 }
 
 export function valorData(dmy: string): number {

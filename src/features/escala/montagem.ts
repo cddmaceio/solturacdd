@@ -1,4 +1,5 @@
 import { brNum, code, norm } from '@/lib/texto'
+import { dataHojeIso } from '@/lib/datas'
 import { mapaAberto, ehFreteiro, ehPlacaGenerica, ehZumpy } from '@/features/pcd/lib'
 import type { Colaborador, EquipeComPessoas, EscalaLinha, PcdMapa, PapelEquipe, Veiculo } from '@/types/dominio'
 
@@ -14,6 +15,7 @@ export type VeiculoEscala = {
   ajudante_codigo: string
   ajudante2_codigo: string
   ajudante_referencia: string
+  ajudante_referencia_nome?: string
   chapa_codigo: string
   chapa_nome: string
   grupo: string
@@ -21,6 +23,7 @@ export type VeiculoEscala = {
 }
 
 export type EntradaMontagem = {
+  hojeIso?: string
   dataIso: string
   veiculos: Veiculo[]
   mapas: PcdMapa[]
@@ -190,7 +193,118 @@ export function mapaPendencia(v: VeiculoEscala, dataIso: string): PcdMapa | null
 // Montagem principal (port fiel de buildVehicles + normalizeOperationalAssignments)
 // ---------------------------------------------------------------------------
 
+export function chaveMapa(m: PcdMapa): string {
+  return JSON.stringify([m.data_entrega, m.mapa, norm(m.placa)])
+}
+
+export function destaqueLinha(v: VeiculoEscala, dataIso: string): 'pernoite' | 'gradativa' | 'noturna' | '' {
+  if (v.rotas.some((m) => m.data_entrega < dataIso)) return 'pernoite'
+  if (v.rotas.some((m) => norm(m.classificacao).includes('GRADATIV'))) return 'gradativa'
+  if (v.rotas.some((m) => norm(m.classificacao).includes('NOTURN'))) return 'noturna'
+  return ''
+}
+
+/** O arquivo salvo é soberano; o PCD só acrescenta mapas em dias não encerrados. */
 export function montarEscala(entrada: EntradaMontagem): VeiculoEscala[] {
+  const passado = entrada.dataIso < (entrada.hojeIso ?? dataHojeIso())
+  const salvas = new Map(entrada.salvas.map((s) => [norm(s.veiculo_placa), s]))
+  const bases = new Map(entrada.veiculos.map((v) => [norm(v.placa), v]))
+  for (const s of entrada.salvas) {
+    const base = s.snapshot?.base ?? bases.get(norm(s.veiculo_placa)) ?? {
+      id: s.id, placa: s.veiculo_placa, tipo_veiculo: '', frota: '', disponibilidade: '',
+      territorio: '', motorista_fixo_codigo: null, motorista_fixo_nome: null, ativo: false,
+    }
+    bases.set(norm(s.veiculo_placa), base)
+  }
+  const mapas = new Map<string, PcdMapa>()
+  for (const s of entrada.salvas) {
+    for (const m of s.snapshot?.rotas ?? []) mapas.set(chaveMapa(m), m)
+  }
+  for (const m of entrada.mapas) {
+    // Legado: D0 é identificável; pernoites antigos não são inferidos.
+    const salva = salvas.get(norm(m.placa))
+    if (passado && (salva?.snapshot || !salva || m.data_entrega !== entrada.dataIso)) continue
+    if (!mapas.has(chaveMapa(m))) mapas.set(chaveMapa(m), m)
+  }
+  const resultado = montarReferenciaEscala({
+    ...entrada,
+    veiculos: [...bases.values()].filter((v) => !passado || salvas.has(norm(v.placa))),
+    mapas: [...mapas.values()],
+  })
+  const protegidos = new Set<VeiculoEscala>()
+  const novosPernoites = new Set<VeiculoEscala>()
+  for (const v of resultado) {
+    const s = salvas.get(norm(v.placa))
+    if (!s) continue
+    const snap = s.snapshot
+    if (snap) {
+      const rotas = new Map(snap.rotas.map((m) => [chaveMapa(m), m]))
+      if (!passado) for (const m of v.rotas) if (!rotas.has(chaveMapa(m))) rotas.set(chaveMapa(m), m)
+      v.rotas = [...rotas.values()]
+      v.base = snap.base
+      v.isSpot = snap.isSpot
+      v.ajudante_referencia = snap.ajudante_referencia
+      v.ajudante_referencia_nome = snap.ajudante_referencia_nome
+    }
+    v.carregado = v.rotas.length > 0
+    v.temD1 = v.rotas.some((m) => m.data_entrega < entrada.dataIso)
+    const inicializando = !passado && (!snap || !snap.rotas.length) && v.carregado
+    for (const slot of ['motorista', 'ajudante', 'ajudante2', 'chapa'] as const) {
+      const campo = `${slot}_codigo` as const
+      if (!inicializando || s[`${slot}_manual`] || code(s[campo]) || (slot === 'chapa' && s.chapa_nome)) {
+        v[campo] = s[campo] ?? ''
+      }
+    }
+    const carry = mapaPendencia(v, entrada.dataIso)
+    const novoPernoite = !passado && carry && !snap?.rotas.some((m) => chaveMapa(m) === chaveMapa(carry))
+    if (novoPernoite) {
+      if (!s.motorista_manual) {
+        v.motorista_codigo = code(carry.motorista_codigo)
+        novosPernoites.add(v)
+      }
+      if (!s.ajudante_manual && code(s.ajudante_codigo) === code(v.ajudante_referencia)) v.ajudante_codigo = ''
+    }
+    v.chapa_nome = s.chapa_nome ?? ''
+    v.grupo = s.sala ?? ''
+    v.observacao = s.observacao ?? ''
+    protegidos.add(v)
+  }
+  for (const v of resultado) {
+    if (!salvas.has(norm(v.placa)) && mapaPendencia(v, entrada.dataIso)) novosPernoites.add(v)
+  }
+  for (const pernoite of novosPernoites) {
+    for (const v of resultado) {
+      if (v === pernoite || novosPernoites.has(v)) continue
+      const salva = salvas.get(norm(v.placa))
+      if (!salva?.motorista_manual && code(v.motorista_codigo) === code(pernoite.motorista_codigo)) v.motorista_codigo = ''
+    }
+  }
+  // Uma nova sugestão nunca desloca alguém de uma alocação já salva.
+  for (const campos of [['motorista_codigo'], ['ajudante_codigo', 'ajudante2_codigo', 'chapa_codigo']] as const) {
+    const ocupados = new Set<string>()
+    for (const v of resultado) {
+      const s = salvas.get(norm(v.placa))
+      for (const campo of campos) {
+        if (s && code(s[campo]) === code(v[campo])) ocupados.add(code(v[campo]))
+      }
+    }
+    for (const v of [...resultado.filter((v) => protegidos.has(v)), ...resultado.filter((v) => !protegidos.has(v))]) {
+      const s = salvas.get(norm(v.placa))
+      for (const campo of campos) {
+        const c = code(v[campo])
+        if (!c || (campo !== 'motorista_codigo' && ['800', '801'].includes(c))) continue
+        if (s && code(s[campo]) === c) continue
+        if (ocupados.has(c)) v[campo] = ''
+        else ocupados.add(c)
+      }
+    }
+  }
+  return resultado
+    .filter((v) => !entrada.salvas.length || salvas.has(norm(v.placa)) || v.carregado)
+    .sort(compararVeiculos)
+}
+
+export function montarReferenciaEscala(entrada: EntradaMontagem): VeiculoEscala[] {
   const { dataIso, veiculos, mapas, pessoas, equipes, salvas } = entrada
 
   const disponiveisMotoristas = new Set(
@@ -505,6 +619,11 @@ export function paraLinhasPersistencia(
 ): Omit<EscalaLinha, 'id'>[] {
   const porCodigo = new Map(pessoas.map((p) => [`${p.tipo}|${code(p.codigo)}`, p.nome]))
   return veiculos.map((v) => ({
+    snapshot: {
+      versao: 1, base: v.base, isSpot: v.isSpot, ajudante_referencia: v.ajudante_referencia,
+      ajudante_referencia_nome: v.ajudante_referencia_nome ?? porCodigo.get(`ajudante|${code(v.ajudante_referencia)}`) ?? '',
+      rotas: v.rotas,
+    },
     data_operacao: dataIso,
     veiculo_placa: v.chave,
     motorista_codigo: v.motorista_codigo,

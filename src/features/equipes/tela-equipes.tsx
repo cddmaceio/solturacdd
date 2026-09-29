@@ -263,8 +263,8 @@ export function TelaEquipes() {
               ?
             </AlertDialogTitle>
             <AlertDialogDescription>
-              O cadastro sai da Base Equipes e as pessoas são retiradas da escala de hoje.
-              Escalas e registros de ausência de datas anteriores são preservados.
+              O cadastro sai da Base Equipes. As pessoas permanecem nas escalas já salvas,
+              e os registros de ausência são preservados.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

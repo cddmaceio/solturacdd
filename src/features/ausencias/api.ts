@@ -41,6 +41,16 @@ export type FormularioAusencia = {
   justificativa: string
 }
 
+function codigosEscalados(
+  linha: Pick<EscalaLinha, 'motorista_codigo' | 'ajudante_codigo' | 'ajudante2_codigo' | 'chapa_codigo'>,
+  papel: PapelEquipe,
+): string[] {
+  return (papel === 'motorista'
+    ? [linha.motorista_codigo]
+    : [linha.ajudante_codigo, linha.ajudante2_codigo, linha.chapa_codigo]
+  ).map(code).filter(Boolean)
+}
+
 /**
  * Pessoas fora da escala da data (regra do legado): exclui quem está escalado,
  * códigos fixos 800/801 de ajudantes e quem tem status de férias na base.
@@ -50,9 +60,7 @@ export function pessoasForaDaEscala(
   escalas: EscalaLinha[],
   papel: PapelEquipe,
 ): Colaborador[] {
-  const escalados = new Set(
-    escalas.map((e) => code(papel === 'motorista' ? e.motorista_codigo : e.ajudante_codigo)),
-  )
+  const escalados = new Set(escalas.flatMap((e) => codigosEscalados(e, papel)))
   return colaboradores.filter((p) => {
     const c = code(p.codigo)
     if (!c) return false
@@ -73,14 +81,12 @@ export function useSalvarAusencia(dataIso: string) {
 
       const { data: escalas, error: erroEscalas } = await db
         .from('escalas')
-        .select('motorista_codigo, ajudante_codigo')
+        .select('motorista_codigo, ajudante_codigo, ajudante2_codigo, chapa_codigo')
         .eq('data_operacao', dataIso)
       if (erroEscalas) throw new Error(erroEscalas.message)
 
       const escalado = (escalas ?? []).some((e) =>
-        code(
-          form.papel === 'motorista' ? e.motorista_codigo : e.ajudante_codigo,
-        ) === codigo,
+        codigosEscalados(e, form.papel).includes(codigo),
       )
       if (escalado) {
         throw new Error('Esta pessoa está escalada. Retire da escala antes de registrar.')

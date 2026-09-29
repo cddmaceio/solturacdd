@@ -18,6 +18,7 @@ import {
   ChevronUp,
   CircleHelp,
   ClipboardList,
+  FileDown,
   Printer,
   RotateCcw,
   Search,
@@ -51,6 +52,7 @@ import {
   type ModoImpressao,
 } from '@/features/escala/impressao'
 import { useAuth } from '@/features/autenticacao/auth-provider'
+import { exportarEscalaExcel } from '@/features/escala/exportar-excel'
 import { useDataOperacao } from '@/hooks/use-data-operacao'
 import { useAusencias } from '@/features/ausencias/api'
 import { usePcdMapas } from '@/features/pcd/api'
@@ -93,7 +95,9 @@ import type { Colaborador, PapelEquipe, PapelSlot } from '@/types/dominio'
 
 /** Colunas do quadro (cabeçalho e linhas usam o mesmo template para alinhar). */
 const COLUNAS_QUADRO =
-  'grid grid-cols-[140px_minmax(255px,1.15fr)_minmax(205px,0.95fr)_minmax(205px,0.9fr)_minmax(260px,1fr)_110px_160px]'
+  'grid grid-cols-[118px_minmax(175px,1fr)_minmax(145px,0.8fr)_minmax(165px,0.9fr)_minmax(210px,1.1fr)_100px_165px]'
+
+const JUSTIFICATIVAS_NOK = ['Roadshow', 'Carro Reserva', 'Conhecimento de Rota', 'ABS', 'Gradativa', 'Pernoite', 'Outros']
 
 type CargaArrasto = {
   papel: PapelEquipe
@@ -690,6 +694,15 @@ export function TelaEscala() {
               >
                 <Printer className="size-4" /> Imprimir
               </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => void exportarEscalaExcel(dataIso, veiculos, nomeDe)
+                  .then(() => toast.success('Escala exportada para Excel'))
+                  .catch((e) => toast.error(`Falha ao exportar: ${(e as Error).message}`))}
+              >
+                <FileDown className="size-4" /> Exportar Excel
+              </Button>
               {podeEditar && (
                 <Button variant="outline" size="sm" onClick={restaurarTudo} disabled={restaurarDia.isPending}>
                   <RotateCcw className="size-4" /> Restaurar dia
@@ -700,7 +713,7 @@ export function TelaEscala() {
         />
 
         {/* KPIs */}
-        <div className="mb-4 overflow-hidden rounded-xl border bg-card shadow-sm">
+        <div className="mb-3 overflow-hidden rounded-xl border bg-card shadow-sm">
           <div className="grid divide-y divide-border sm:grid-cols-2 sm:divide-y-0 lg:grid-cols-4 xl:grid-cols-8 xl:divide-x">
           <CartaoKpi Icone={ClipboardList} rotulo="Mapas D0" valor={kpis.d0} sub={`${paraDmy(dataIso)}${kpis.recD0 ? ` · ${kpis.recD0} REC` : ''}${kpis.zumpyD0 ? ` · ${kpis.zumpyD0} Zumpy` : ''}`} cor="text-sky-700" />
           <CartaoKpi Icone={AlertTriangle} rotulo="Pendências D-1+" valor={kpis.pendencias} sub="mapas anteriores em aberto" cor="text-amber-700" />
@@ -794,13 +807,13 @@ export function TelaEscala() {
           </span>
         </div>
 
-        <div className="grid gap-4 xl:grid-cols-[1fr_320px]">
+        <div className="grid min-w-0 gap-3 2xl:grid-cols-[minmax(0,1fr)_290px]">
           {/* Quadro */}
-          <div className="overflow-hidden rounded-xl border bg-card">
-            <div className="max-h-[calc(100dvh-390px)] min-h-64 overflow-auto">
+          <div className="min-w-0 overflow-hidden rounded-xl border bg-card">
+            <div className="max-h-[calc(100dvh-330px)] min-h-80 overflow-auto">
               {/* Largura mínima única: cabeçalho e linhas compartilham o mesmo
                   box, garantindo colunas alinhadas com rolagem horizontal. */}
-              <div className="min-w-[1400px]">
+              <div className="min-w-[1120px]">
                 <div
                   className={`sticky top-0 z-10 ${COLUNAS_QUADRO} gap-2 border-b border-slate-200 bg-slate-100/95 px-3 py-2.5 text-[10px] font-bold uppercase tracking-[0.09em] text-slate-600 backdrop-blur`}
                 >
@@ -810,7 +823,7 @@ export function TelaEscala() {
                   <div>Motorista</div>
                   <div>Equipe de ajudantes</div>
                   <div>Sala</div>
-                  <div>Observação</div>
+                  <div>Justificativa NOK</div>
                 </div>
                 {visiveis.length === 0 && (
                   <p className="p-6 text-center text-sm text-muted-foreground">
@@ -1416,19 +1429,24 @@ function LinhaVeiculo({
         </SelectContent>
       </Select>
 
-      {/* Observação */}
+      {/* Justificativa do NOK de fidelização */}
       <div className="flex items-start gap-1">
-        <Input
-          defaultValue={v.observacao}
-          key={`${v.chave}-${v.observacao}`}
-          onBlur={(e) => {
-            const valor = e.target.value
-            if (valor !== v.observacao) onObservacao(valor)
-          }}
-          placeholder="Observação…"
+        <Select
+          value={v.observacao || '__sem_justificativa__'}
+          onValueChange={(valor) => onObservacao(valor === '__sem_justificativa__' ? '' : valor)}
           disabled={!podeEditar}
-          className="h-8 text-xs"
-        />
+        >
+          <SelectTrigger className="h-8 min-w-0 flex-1 text-xs" aria-label={`Justificativa NOK do veículo ${v.placa}`}>
+            <SelectValue placeholder="Selecionar…" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="__sem_justificativa__">Sem justificativa</SelectItem>
+            {v.observacao && !JUSTIFICATIVAS_NOK.includes(v.observacao) && (
+              <SelectItem value={v.observacao}>{v.observacao} (anterior)</SelectItem>
+            )}
+            {JUSTIFICATIVAS_NOK.map((motivo) => <SelectItem key={motivo} value={motivo}>{motivo}</SelectItem>)}
+          </SelectContent>
+        </Select>
         <Button
           variant="ghost"
           size="icon-sm"

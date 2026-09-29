@@ -207,7 +207,7 @@
     .print-summary {
         text-align: right;
         font-family: Arial, sans-serif;
-        font-size: 7.2pt;
+        font-size: 7.6pt;
         line-height: 1.35;
         color: #334b5a;
         white-space: nowrap;
@@ -231,7 +231,7 @@
         color: #253c4b;
         border: 0.3mm solid #aebdc7;
         padding: 1.6mm 1.4mm;
-        font-size: 7.2pt;
+        font-size: 7.6pt;
         line-height: 1;
         text-align: left;
         text-transform: uppercase;
@@ -242,7 +242,7 @@
     .print-table td {
         border: 0.28mm solid #c7d1d8;
         padding: 1.35mm 1.4mm;
-        font-size: 7.6pt;
+        font-size: 8pt;
         line-height: 1.18;
         vertical-align: middle;
         color: #172b38;
@@ -268,7 +268,7 @@
 
     .print-table td.print-person {
         display: table-cell !important;
-        font-size: 7.4pt;
+        font-size: 7.8pt;
         line-height: 1.15;
         white-space: normal;
         overflow-wrap: break-word;
@@ -289,7 +289,7 @@
 
     .print-team-item strong {
         color: #516675;
-        font-size: 6.1pt;
+        font-size: 6.6pt;
         letter-spacing: 0.08mm;
     }
 
@@ -355,21 +355,27 @@
     }
 
     .print-sheet.density-tight .print-table th {
-        font-size: 6.7pt;
-        padding: 1.2mm 1.1mm;
+        font-size: 7.1pt;
+        padding: 1mm 1mm;
     }
 
     .print-sheet.density-tight .print-table td {
-        font-size: 6.9pt;
-        padding: 0.95mm 1.1mm;
+        font-size: 7.3pt;
+        line-height: 1.12;
+        padding: 0.7mm 1mm;
     }
 
     .print-sheet.density-tight .print-table td.print-person {
-        font-size: 6.8pt;
+        font-size: 7.2pt;
+        line-height: 1.12;
     }
 
     .print-sheet.density-tight .print-team-list {
-        gap: 0.35mm;
+        gap: 0.25mm;
+    }
+
+    .print-sheet.density-tight .print-team-item strong {
+        font-size: 6.4pt;
     }
 
     .print-sheet.density-ultra .print-head {

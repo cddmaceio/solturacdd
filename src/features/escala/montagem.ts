@@ -1,6 +1,6 @@
 import { brNum, code, norm } from '@/lib/texto'
 import { dataHojeIso } from '@/lib/datas'
-import { mapaAberto, ehFreteiro, ehPlacaGenerica, ehZumpy } from '@/features/pcd/lib'
+import { mapaAberto, situacaoMpd, ehFreteiro, ehPlacaGenerica, ehZumpy } from '@/features/pcd/lib'
 import type { Colaborador, EquipeComPessoas, EscalaLinha, PcdMapa, PapelEquipe, Veiculo } from '@/types/dominio'
 
 export type VeiculoEscala = {
@@ -207,6 +207,10 @@ export function destaqueLinha(v: VeiculoEscala, dataIso: string): 'pernoite' | '
 /** O arquivo salvo é soberano; o PCD só acrescenta mapas em dias não encerrados. */
 export function montarEscala(entrada: EntradaMontagem): VeiculoEscala[] {
   const passado = entrada.dataIso < (entrada.hojeIso ?? dataHojeIso())
+  const fechados = new Set(entrada.mapas.filter((m) =>
+    m.data_entrega < entrada.dataIso && situacaoMpd(m.mpd) === 'Fechado',
+  ).map(chaveMapa))
+  const manterRota = (m: PcdMapa) => passado || !fechados.has(chaveMapa(m))
   const salvas = new Map(entrada.salvas.map((s) => [norm(s.veiculo_placa), s]))
   const bases = new Map(entrada.veiculos.map((v) => [norm(v.placa), v]))
   for (const s of entrada.salvas) {
@@ -218,7 +222,7 @@ export function montarEscala(entrada: EntradaMontagem): VeiculoEscala[] {
   }
   const mapas = new Map<string, PcdMapa>()
   for (const s of entrada.salvas) {
-    for (const m of s.snapshot?.rotas ?? []) mapas.set(chaveMapa(m), m)
+    for (const m of s.snapshot?.rotas ?? []) if (manterRota(m)) mapas.set(chaveMapa(m), m)
   }
   for (const m of entrada.mapas) {
     // Legado: D0 é identificável; pernoites antigos não são inferidos.
@@ -238,7 +242,7 @@ export function montarEscala(entrada: EntradaMontagem): VeiculoEscala[] {
     if (!s) continue
     const snap = s.snapshot
     if (snap) {
-      const rotas = new Map(snap.rotas.map((m) => [chaveMapa(m), m]))
+      const rotas = new Map(snap.rotas.filter(manterRota).map((m) => [chaveMapa(m), m]))
       if (!passado) for (const m of v.rotas) if (!rotas.has(chaveMapa(m))) rotas.set(chaveMapa(m), m)
       v.rotas = [...rotas.values()]
       v.base = snap.base

@@ -6,7 +6,7 @@ import { montarEscala } from './montagem'
 
 it('exporta mapa e equipe arquivados com destaque de pernoite após fechamento no PCD', async () => {
   const inicial = entrada()
-  const veiculos = montarEscala({ ...inicial, salvas: salvar(inicial),
+  const veiculos = montarEscala({ ...inicial, hojeIso: '2026-09-29', salvas: salvar(inicial),
     mapas: [{ ...inicial.mapas[0], mpd: 'PC financeira' }] })
   const abaSpy = vi.spyOn(ExcelJS.Workbook.prototype, 'addWorksheet')
   const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})

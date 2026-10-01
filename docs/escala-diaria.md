@@ -6,8 +6,9 @@ observação continuam sendo editados na própria escala.
 
 - O PCD pode acrescentar mapas apenas em hoje e datas futuras. A identidade é
   data de entrega + número do mapa + placa normalizada, independentemente do UUID.
-- Mapas já arquivados conservam seus dados e status, mesmo após reimportação,
-  fechamento ou exclusão no PCD. A situação operacional atual permanece no PCD.
+- Em dias passados, mapas arquivados conservam seus dados e status. Em hoje e
+  datas futuras, mapas anteriores explicitamente fechados no PCD saem das
+  pendências, preservando equipes e mapas D0. Ausência no CSV não prova fechamento.
 - Na entrada de um pernoite, o motorista vem do PCD. A dupla fidelizada automática
   é liberada; escolhas manuais têm prioridade. Folgas e outras ausências continuam
   impedindo que a pessoa apareça como disponível.

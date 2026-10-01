@@ -127,6 +127,7 @@ export function useImportarPcd() {
     },
     onSuccess: (resultado) => {
       void qc.invalidateQueries({ queryKey: ['pcd_mapas'] })
+      void qc.invalidateQueries({ queryKey: ['escalas'] })
       void qc.invalidateQueries({ queryKey: ['veiculos'] })
       toast.success(
         `PCD importado: ${resultado.total} mapa(s) em ${resultado.datas} data(s)`,

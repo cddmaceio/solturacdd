@@ -4,6 +4,19 @@ import type { Colaborador, Entrada } from './fixtures-arquivo'
 import { entrada, mapa, salvar } from './fixtures-arquivo'
 
 describe('arquivo diário da escala', () => {
+  it('retira pendência fechada de hoje sem alterar a equipe manual ou o histórico', () => {
+    const inicial = entrada()
+    const salvas = salvar(inicial).map((s) => ({ ...s, motorista_codigo: '99', motorista_manual: true }))
+    const atualizado = { ...inicial, salvas, mapas: [{ ...inicial.mapas[0], id: 'reimportado', mpd: 'pc financeira' }] }
+    const [hoje] = montarEscala(atualizado)
+    expect(hoje.rotas).toEqual([])
+    expect(hoje.temD1).toBe(false)
+    expect(hoje.carregado).toBe(false)
+    expect(hoje.motorista_codigo).toBe('99')
+    const [historico] = montarEscala({ ...atualizado, hojeIso: '2026-09-29' })
+    expect(historico.rotas).toEqual(inicial.mapas)
+  })
+
   it('preserva Nelson e o mapa de sábado após fechar, reimportar e remover os cadastros', () => {
     const inicial = entrada()
     const salvas = salvar(inicial)
@@ -27,8 +40,8 @@ describe('arquivo diário da escala', () => {
     const [v] = montarEscala({ ...inicial, salvas, mapas: [
       { ...inicial.mapas[0], id: 'novo-id', mpd: 'PC financeira' }, mapa('NOVO', '2026-09-28'),
     ] })
-    expect(v.rotas).toHaveLength(2)
-    expect(v.rotas[0].mpd).toBe('EMITIDO')
+    expect(v.rotas).toHaveLength(1)
+    expect(v.rotas[0].mapa).toBe('NOVO')
     expect(v.motorista_codigo).toBe('99')
     expect(v.ajudante_codigo).toBe('')
     expect(v.grupo).toBe('VESPERTINA')

@@ -9,7 +9,7 @@ import { AreaImpressao } from './impressao'
 describe('linha da escala', () => {
   it('imprime o mesmo pernoite preservado após fechamento no PCD', () => {
     const inicial = entrada()
-    const veiculos = montarEscala({ ...inicial, salvas: salvar(inicial),
+    const veiculos = montarEscala({ ...inicial, hojeIso: '2026-09-29', salvas: salvar(inicial),
       mapas: [{ ...inicial.mapas[0], mpd: 'PC financeira' }] })
     render(<AreaImpressao modo="geral" veiculos={veiculos} dataIso={inicial.dataIso} nomeDe={() => 'NELSON'} />)
     expect(screen.getByText('UHJ6F39')).toBeInTheDocument()

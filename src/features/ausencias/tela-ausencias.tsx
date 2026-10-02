@@ -4,6 +4,7 @@ import { FileDown, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import {
   Select,
   SelectContent,
@@ -34,7 +35,7 @@ import {
   useSalvarAusencia,
 } from '@/features/ausencias/api'
 import { useColaboradores } from '@/features/equipes/api'
-import { norm } from '@/lib/texto'
+import { code, norm } from '@/lib/texto'
 import { paraDmy } from '@/lib/datas'
 import { baixarCsv } from '@/lib/csv'
 import { TIPOS_AUSENCIA, type PapelEquipe, type TipoAusencia } from '@/types/dominio'
@@ -67,6 +68,11 @@ export function TelaAusencias() {
   const [selecionado, setSelecionado] = useState<{ codigo: string; nome: string } | null>(null)
   const [tipo, setTipo] = useState<TipoAusencia>('Folga')
   const [justificativa, setJustificativa] = useState('')
+  const [pessoaHistorico, setPessoaHistorico] = useState<{ papel: PapelEquipe; codigo: string; nome: string } | null>(null)
+  const detalhesHistorico = useMemo(() => pessoaHistorico
+    ? (historico ?? []).filter((r) => r.papel === pessoaHistorico.papel && code(r.codigo) === pessoaHistorico.codigo)
+      .sort((a, b) => b.data.localeCompare(a.data))
+    : [], [historico, pessoaHistorico])
 
   const motoristas = useMemo(
     () =>
@@ -398,7 +404,7 @@ export function TelaAusencias() {
         <div className="flex items-center justify-between border-b p-3">
           <strong className="text-sm">Histórico acumulado de absenteísmo / folgas</strong>
           <span className="text-xs text-muted-foreground">
-            Consolida todos os registros por colaborador.
+            Clique no nome para ver os dias e motivos de ausência.
           </span>
         </div>
         <div className="max-h-80 overflow-auto">
@@ -430,7 +436,17 @@ export function TelaAusencias() {
                 <TableRow key={`${x.papel}-${x.codigo}`}>
                   <TableCell className="capitalize">{x.papel}</TableCell>
                   <TableCell className="font-medium tabular-nums">{x.codigo}</TableCell>
-                  <TableCell className="font-semibold">{x.nome}</TableCell>
+                  <TableCell className="font-semibold">
+                    <button
+                      type="button"
+                      className="cursor-pointer rounded-sm text-left text-primary underline decoration-primary/40 underline-offset-4 hover:decoration-primary focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring"
+                      onClick={() => setPessoaHistorico({ papel: x.papel, codigo: x.codigo, nome: x.nome })}
+                      aria-label={`Ver dias de ausência de ${x.nome}`}
+                      aria-haspopup="dialog"
+                    >
+                      {x.nome}
+                    </button>
+                  </TableCell>
                   <TableCell className="text-right tabular-nums">{x.faltas}</TableCell>
                   <TableCell className="text-right tabular-nums">{x.folgas}</TableCell>
                   <TableCell className="text-right tabular-nums">{x.ferias}</TableCell>
@@ -445,6 +461,40 @@ export function TelaAusencias() {
           </Table>
         </div>
       </div>
+      <Dialog open={pessoaHistorico !== null} onOpenChange={(aberto) => { if (!aberto) setPessoaHistorico(null) }}>
+        <DialogContent className="max-h-[85dvh] min-w-0 sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Dias de ausência · {pessoaHistorico?.nome}</DialogTitle>
+            <DialogDescription>
+              <span className="capitalize">{pessoaHistorico?.papel}</span> · Código {pessoaHistorico?.codigo}
+              {' · '}{detalhesHistorico.length} registro(s) no histórico acumulado, incluindo folgas.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="min-w-0 max-h-[60dvh] overflow-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Data</TableHead>
+                  <TableHead>Classificação</TableHead>
+                  <TableHead>Justificativa / observação</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {detalhesHistorico.map((r) => (
+                  <TableRow key={r.id}>
+                    <TableCell className="whitespace-nowrap tabular-nums">{paraDmy(r.data)}</TableCell>
+                    <TableCell><Badge variant="outline" className={corTipo(r.tipo)}>{r.tipo}</Badge></TableCell>
+                    <TableCell className="min-w-40 whitespace-pre-wrap break-words">{r.justificativa || '—'}</TableCell>
+                  </TableRow>
+                ))}
+                {detalhesHistorico.length === 0 && (
+                  <TableRow><TableCell colSpan={3} className="h-16 text-center text-muted-foreground">Nenhum registro para este colaborador.</TableCell></TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

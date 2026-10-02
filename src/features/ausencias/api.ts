@@ -24,12 +24,18 @@ export function useHistoricoAusencias() {
   return useQuery({
     queryKey: ['ausencias', 'historico'],
     queryFn: async (): Promise<Ausencia[]> => {
-      const { data, error } = await obterSupabase()
-        .from('ausencias')
-        .select('*')
-        .order('data', { ascending: false })
-      if (error) throw new Error(error.message)
-      return (data ?? []) as Ausencia[]
+      const registros: Ausencia[] = []
+      for (let inicio = 0; ; inicio += 1000) {
+        const { data, error } = await obterSupabase()
+          .from('ausencias')
+          .select('*')
+          .order('data', { ascending: false })
+          .order('id', { ascending: true })
+          .range(inicio, inicio + 999)
+        if (error) throw new Error(error.message)
+        registros.push(...((data ?? []) as Ausencia[]))
+        if ((data?.length ?? 0) < 1000) return registros
+      }
     },
   })
 }

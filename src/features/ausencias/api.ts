@@ -143,6 +143,26 @@ export function useSalvarAusencia(dataIso: string) {
   })
 }
 
+export function useEditarJustificativaAusencia() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ id, justificativa }: { id: string; justificativa: string }): Promise<void> => {
+      const { error } = await obterSupabase()
+        .from('ausencias')
+        .update({ justificativa: justificativa.trim() })
+        .eq('id', id)
+        .select('id')
+        .single()
+      if (error) throw new Error(error.message)
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['ausencias'] })
+      toast.success('Justificativa atualizada')
+    },
+    onError: (e) => toast.error(`Falha ao salvar justificativa: ${e.message}`),
+  })
+}
+
 export function useRemoverAusencia(dataIso: string) {
   const qc = useQueryClient()
   return useMutation({

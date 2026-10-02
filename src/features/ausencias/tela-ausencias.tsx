@@ -30,6 +30,7 @@ import {
   consolidarHistorico,
   pessoasForaDaEscala,
   useAusencias,
+  useEditarJustificativaAusencia,
   useHistoricoAusencias,
   useRemoverAusencia,
   useSalvarAusencia,
@@ -62,6 +63,7 @@ export function TelaAusencias() {
   const { data: historico } = useHistoricoAusencias()
   const salvar = useSalvarAusencia(dataIso)
   const remover = useRemoverAusencia(dataIso)
+  const editarJustificativa = useEditarJustificativaAusencia()
 
   const [busca, setBusca] = useState('')
   const [papel, setPapel] = useState<PapelEquipe>('motorista')
@@ -69,6 +71,7 @@ export function TelaAusencias() {
   const [tipo, setTipo] = useState<TipoAusencia>('Folga')
   const [justificativa, setJustificativa] = useState('')
   const [pessoaHistorico, setPessoaHistorico] = useState<{ papel: PapelEquipe; codigo: string; nome: string } | null>(null)
+  const [edicaoJustificativa, setEdicaoJustificativa] = useState<{ id: string; texto: string } | null>(null)
   const detalhesHistorico = useMemo(() => pessoaHistorico
     ? (historico ?? []).filter((r) => r.papel === pessoaHistorico.papel && code(r.codigo) === pessoaHistorico.codigo)
       .sort((a, b) => b.data.localeCompare(a.data))
@@ -461,7 +464,12 @@ export function TelaAusencias() {
           </Table>
         </div>
       </div>
-      <Dialog open={pessoaHistorico !== null} onOpenChange={(aberto) => { if (!aberto) setPessoaHistorico(null) }}>
+      <Dialog open={pessoaHistorico !== null} onOpenChange={(aberto) => {
+        if (!aberto) {
+          setPessoaHistorico(null)
+          setEdicaoJustificativa(null)
+        }
+      }}>
         <DialogContent className="max-h-[85dvh] min-w-0 sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle>Dias de ausência · {pessoaHistorico?.nome}</DialogTitle>
@@ -484,7 +492,41 @@ export function TelaAusencias() {
                   <TableRow key={r.id}>
                     <TableCell className="whitespace-nowrap tabular-nums">{paraDmy(r.data)}</TableCell>
                     <TableCell><Badge variant="outline" className={corTipo(r.tipo)}>{r.tipo}</Badge></TableCell>
-                    <TableCell className="min-w-40 whitespace-pre-wrap break-words">{r.justificativa || '—'}</TableCell>
+                    <TableCell className="min-w-40 whitespace-pre-wrap break-words">
+                      {edicaoJustificativa?.id === r.id ? (
+                        <div className="grid gap-2">
+                          <Textarea
+                            autoFocus
+                            aria-label={`Justificativa de ${paraDmy(r.data)}`}
+                            value={edicaoJustificativa.texto}
+                            onChange={(e) => setEdicaoJustificativa({ id: r.id, texto: e.target.value })}
+                            disabled={editarJustificativa.isPending}
+                            className="min-h-24"
+                          />
+                          <div className="flex gap-2">
+                            <Button size="sm" disabled={!podeRegistrar || editarJustificativa.isPending}
+                              onClick={() => editarJustificativa.mutate({ id: r.id, justificativa: edicaoJustificativa.texto }, {
+                                onSuccess: () => setEdicaoJustificativa((atual) => atual?.id === r.id ? null : atual),
+                              })}>
+                              {editarJustificativa.isPending ? 'Salvando…' : 'Salvar'}
+                            </Button>
+                            <Button size="sm" variant="outline" disabled={editarJustificativa.isPending}
+                              onClick={() => setEdicaoJustificativa(null)}>Cancelar</Button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="grid justify-items-start gap-2">
+                          <span>{r.justificativa || '—'}</span>
+                          {podeRegistrar && (
+                            <Button size="sm" variant="outline" disabled={editarJustificativa.isPending}
+                              aria-label={`Editar justificativa de ${paraDmy(r.data)}`}
+                              onClick={() => setEdicaoJustificativa({ id: r.id, texto: r.justificativa ?? '' })}>
+                              Editar justificativa
+                            </Button>
+                          )}
+                        </div>
+                      )}
+                    </TableCell>
                   </TableRow>
                 ))}
                 {detalhesHistorico.length === 0 && (

@@ -197,6 +197,10 @@ export function chaveMapa(m: PcdMapa): string {
   return JSON.stringify([m.data_entrega, m.mapa, norm(m.placa)])
 }
 
+function identidadeMapa(m: PcdMapa): string {
+  return JSON.stringify([m.data_entrega, norm(m.mapa)])
+}
+
 export function destaqueLinha(v: VeiculoEscala, dataIso: string): 'pernoite' | 'gradativa' | 'noturna' | '' {
   if (v.rotas.some((m) => m.data_entrega < dataIso)) return 'pernoite'
   if (v.rotas.some((m) => norm(m.classificacao).includes('GRADATIV'))) return 'gradativa'
@@ -210,6 +214,7 @@ export function montarEscala(entrada: EntradaMontagem): VeiculoEscala[] {
   const fechados = new Set(entrada.mapas.filter((m) =>
     m.data_entrega < entrada.dataIso && situacaoMpd(m.mpd) === 'Fechado',
   ).map(chaveMapa))
+  const mapasAtualizadosPcd = new Set(entrada.mapas.map(identidadeMapa))
   const manterRota = (m: PcdMapa) => passado || !fechados.has(chaveMapa(m))
   const salvas = new Map(entrada.salvas.map((s) => [norm(s.veiculo_placa), s]))
   const bases = new Map(entrada.veiculos.map((v) => [norm(v.placa), v]))
@@ -222,7 +227,11 @@ export function montarEscala(entrada: EntradaMontagem): VeiculoEscala[] {
   }
   const mapas = new Map<string, PcdMapa>()
   for (const s of entrada.salvas) {
-    for (const m of s.snapshot?.rotas ?? []) if (manterRota(m)) mapas.set(chaveMapa(m), m)
+    for (const m of s.snapshot?.rotas ?? []) {
+      if (!manterRota(m)) continue
+      if (!passado && mapasAtualizadosPcd.has(identidadeMapa(m))) continue
+      mapas.set(chaveMapa(m), m)
+    }
   }
   for (const m of entrada.mapas) {
     // Legado: D0 é identificável; pernoites antigos não são inferidos.
@@ -242,7 +251,10 @@ export function montarEscala(entrada: EntradaMontagem): VeiculoEscala[] {
     if (!s) continue
     const snap = s.snapshot
     if (snap) {
-      const rotas = new Map(snap.rotas.filter(manterRota).map((m) => [chaveMapa(m), m]))
+      const rotas = new Map(snap.rotas
+        .filter(manterRota)
+        .filter((m) => passado || !mapasAtualizadosPcd.has(identidadeMapa(m)))
+        .map((m) => [chaveMapa(m), m]))
       if (!passado) for (const m of v.rotas) if (!rotas.has(chaveMapa(m))) rotas.set(chaveMapa(m), m)
       v.rotas = [...rotas.values()]
       v.base = snap.base

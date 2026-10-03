@@ -68,6 +68,29 @@ describe('arquivo diário da escala', () => {
     expect([v.motorista_codigo, v.ajudante_codigo]).not.toContain('20')
   })
 
+  it('PCD atualizado troca a placa antiga do mesmo mapa no pernoite', () => {
+    const inicial = entrada()
+    const antigo = { ...mapa('MAPA-1', '2026-10-02'), placa: 'UHJ6F39' }
+    const entradaDia = {
+      ...inicial,
+      dataIso: '2026-10-03',
+      hojeIso: '2026-10-03',
+      mapas: [antigo],
+    }
+    const salvas = salvar(entradaDia)
+    const atualizado = { ...antigo, id: 'pcd-atualizado', placa: 'ABC1D23' }
+    const resultado = montarEscala({
+      ...entradaDia,
+      veiculos: [...entradaDia.veiculos, { ...entradaDia.veiculos[0], id: 'novo', placa: 'ABC1D23' }],
+      mapas: [atualizado],
+      salvas,
+    })
+
+    expect(resultado.flatMap((v) => v.rotas).map((m) => [m.mapa, m.placa])).toEqual([
+      ['MAPA-1', 'ABC1D23'],
+    ])
+  })
+
   it('pernoite novo respeita motorista e ajudante escolhidos manualmente', () => {
     const inicial = entrada()
     const salvas = salvar({ ...inicial, mapas: [] }).map((s) => ({ ...s,

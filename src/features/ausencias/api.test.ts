@@ -20,4 +20,14 @@ describe('pessoasForaDaEscala', () => {
     const pessoas = ['10', '20'].map((codigo) => colaborador(codigo, 'motorista'))
     expect(pessoasForaDaEscala(pessoas, [linha], 'motorista').map((p) => p.codigo)).toEqual(['20'])
   })
+
+  it('permite lançar férias de quem ficou fora da escala no dia escolhido', () => {
+    const pessoa = { ...colaborador('50', 'motorista'), status: 'Férias' }
+    expect(pessoasForaDaEscala([pessoa], [linha], 'motorista')).toEqual([pessoa])
+  })
+
+  it('não oferece os códigos reservados de ajudantes', () => {
+    const pessoas = ['800', '801', '50'].map((codigo) => colaborador(codigo, 'ajudante'))
+    expect(pessoasForaDaEscala(pessoas, [linha], 'ajudante').map((p) => p.codigo)).toEqual(['50'])
+  })
 })

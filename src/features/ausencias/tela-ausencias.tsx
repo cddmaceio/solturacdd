@@ -52,14 +52,19 @@ function corTipo(tipo: string): string {
 }
 
 export function TelaAusencias() {
+  const { dataIso, definirData } = useDataOperacao()
+
+  return <ConteudoAusencias key={dataIso} dataIso={dataIso} definirData={definirData} />
+}
+
+function ConteudoAusencias({ dataIso, definirData }: { dataIso: string; definirData: (iso: string) => void }) {
   const { pode } = useAuth()
   const podeRegistrar = pode('ausencias.registrar')
   const podeExportar = pode('exportacoes.gerar')
-  const { dataIso } = useDataOperacao()
 
   const { data: colaboradores, isLoading: carregandoPessoas } = useColaboradores()
-  const { data: escalas } = useEscalas(dataIso)
-  const { data: registros } = useAusencias(dataIso)
+  const { data: escalas, isFetching: carregandoEscala, isError: erroEscala } = useEscalas(dataIso)
+  const { data: registros, isFetching: carregandoRegistros } = useAusencias(dataIso)
   const { data: historico } = useHistoricoAusencias()
   const salvar = useSalvarAusencia(dataIso)
   const remover = useRemoverAusencia(dataIso)
@@ -72,6 +77,7 @@ export function TelaAusencias() {
   const [justificativa, setJustificativa] = useState('')
   const [pessoaHistorico, setPessoaHistorico] = useState<{ papel: PapelEquipe; codigo: string; nome: string } | null>(null)
   const [edicaoJustificativa, setEdicaoJustificativa] = useState<{ id: string; texto: string } | null>(null)
+  const escalaDisponivel = !carregandoEscala && !erroEscala && (escalas?.length ?? 0) > 0
   const detalhesHistorico = useMemo(() => pessoaHistorico
     ? (historico ?? []).filter((r) => r.papel === pessoaHistorico.papel && code(r.codigo) === pessoaHistorico.codigo)
       .sort((a, b) => b.data.localeCompare(a.data))
@@ -79,21 +85,21 @@ export function TelaAusencias() {
 
   const motoristas = useMemo(
     () =>
-      pessoasForaDaEscala(
+      escalaDisponivel ? pessoasForaDaEscala(
         (colaboradores ?? []).filter((c) => c.tipo === 'motorista'),
         escalas ?? [],
         'motorista',
-      ),
-    [colaboradores, escalas],
+      ) : [],
+    [colaboradores, escalas, escalaDisponivel],
   )
   const ajudantes = useMemo(
     () =>
-      pessoasForaDaEscala(
+      escalaDisponivel ? pessoasForaDaEscala(
         (colaboradores ?? []).filter((c) => c.tipo === 'ajudante'),
         escalas ?? [],
         'ajudante',
-      ),
-    [colaboradores, escalas],
+      ) : [],
+    [colaboradores, escalas, escalaDisponivel],
   )
 
   const filtrar = (lista: typeof motoristas) => {
@@ -104,6 +110,10 @@ export function TelaAusencias() {
   const listaPapel = papel === 'motorista' ? filtrar(motoristas) : filtrar(ajudantes)
 
   const registrosOrdenados = useMemo(() => [...(registros ?? [])], [registros])
+  const pessoasRegistradas = useMemo(
+    () => new Set((registros ?? []).map((r) => `${r.papel}|${code(r.codigo)}`)),
+    [registros],
+  )
   const resumo = useMemo(() => consolidarHistorico(historico ?? []), [historico])
 
   const contagens = useMemo(() => {
@@ -126,8 +136,13 @@ export function TelaAusencias() {
   }
 
   function registrar() {
-    if (!selecionado) {
+    const elegiveis = papel === 'motorista' ? motoristas : ajudantes
+    if (!escalaDisponivel || !selecionado || !elegiveis.some((p) => code(p.codigo) === code(selecionado.codigo))) {
       toast.error('Selecione primeiro um colaborador fora da escala')
+      return
+    }
+    if (carregandoRegistros || pessoasRegistradas.has(`${papel}|${code(selecionado.codigo)}`)) {
+      toast.error('Este colaborador já possui um lançamento nesta data')
       return
     }
     salvar.mutate(
@@ -208,6 +223,18 @@ export function TelaAusencias() {
         }
       />
 
+      <div className="mb-4 flex flex-wrap items-center gap-3 rounded-xl border bg-card p-3">
+        <label htmlFor="data-absenteismo" className="text-sm font-semibold">Data do absenteísmo</label>
+        <Input
+          id="data-absenteismo"
+          type="date"
+          value={dataIso}
+          onChange={(e) => e.target.value && definirData(e.target.value)}
+          className="w-44"
+        />
+        <span className="text-xs text-muted-foreground">Lançamentos e equipe fora da escala de {paraDmy(dataIso)}.</span>
+      </div>
+
       <div className="mb-4 grid gap-3 sm:grid-cols-3 lg:grid-cols-5">
         {kpis.map((k) => (
           <div key={k.rotulo} className="rounded-xl border bg-card p-4">
@@ -255,10 +282,16 @@ export function TelaAusencias() {
           </div>
 
           <div className="grid max-h-96 gap-2 overflow-auto p-3">
-            {carregandoPessoas && (
+            {(carregandoPessoas || carregandoEscala) && (
               <p className="p-2 text-sm text-muted-foreground">Carregando equipe…</p>
             )}
-            {!carregandoPessoas && listaPapel.length === 0 && (
+            {!carregandoEscala && erroEscala && (
+              <p className="p-2 text-sm text-destructive">Não foi possível carregar a escala desta data.</p>
+            )}
+            {!carregandoEscala && !erroEscala && !escalaDisponivel && (
+              <p className="p-2 text-sm text-muted-foreground">Não há escala salva para esta data. Crie a escala do dia antes de registrar ocorrências.</p>
+            )}
+            {!carregandoPessoas && escalaDisponivel && listaPapel.length === 0 && (
               <p className="p-2 text-sm text-muted-foreground">
                 Nenhuma pessoa disponível com este filtro.
               </p>
@@ -276,8 +309,10 @@ export function TelaAusencias() {
                     {p.sala ? ` · ${p.sala}` : ''}
                   </div>
                 </div>
-                <Button size="sm" variant="outline" className="h-7" disabled={!podeRegistrar} onClick={() => selecionarPessoa(p)}>
-                  Registrar
+                <Button size="sm" variant="outline" className="h-7"
+                  disabled={!podeRegistrar || carregandoRegistros || pessoasRegistradas.has(`${papel}|${code(p.codigo)}`)}
+                  onClick={() => selecionarPessoa(p)}>
+                  {pessoasRegistradas.has(`${papel}|${code(p.codigo)}`) ? 'Registrado' : 'Registrar'}
                 </Button>
               </div>
             ))}
@@ -335,7 +370,7 @@ export function TelaAusencias() {
                 className="min-h-24"
               />
             </div>
-            <Button onClick={registrar} disabled={!podeRegistrar || salvar.isPending || !selecionado}>
+            <Button onClick={registrar} disabled={!podeRegistrar || salvar.isPending || !selecionado || !escalaDisponivel || carregandoRegistros || pessoasRegistradas.has(`${papel}|${code(selecionado?.codigo)}`)}>
               {salvar.isPending ? 'Salvando…' : 'Salvar registro'}
             </Button>
             {!podeRegistrar && (

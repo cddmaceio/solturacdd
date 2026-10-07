@@ -58,8 +58,8 @@ function codigosEscalados(
 }
 
 /**
- * Pessoas fora da escala da data (regra do legado): exclui quem está escalado,
- * códigos fixos 800/801 de ajudantes e quem tem status de férias na base.
+ * Pessoas fora da escala da data: exclui quem está escalado e os códigos
+ * fixos 800/801 de ajudantes. O status atual não descreve datas passadas.
  */
 export function pessoasForaDaEscala(
   colaboradores: Colaborador[],
@@ -71,7 +71,6 @@ export function pessoasForaDaEscala(
     const c = code(p.codigo)
     if (!c) return false
     if (papel === 'ajudante' && (c === '800' || c === '801')) return false
-    if (norm(p.status).includes('FERIA')) return false
     return !escalados.has(c)
   })
 }
@@ -90,6 +89,12 @@ export function useSalvarAusencia(dataIso: string) {
         .select('motorista_codigo, ajudante_codigo, ajudante2_codigo, chapa_codigo')
         .eq('data_operacao', dataIso)
       if (erroEscalas) throw new Error(erroEscalas.message)
+      if (!escalas?.length) {
+        throw new Error('Não há escala salva para esta data. Crie a escala do dia antes de registrar.')
+      }
+      if (form.papel === 'ajudante' && (codigo === '800' || codigo === '801')) {
+        throw new Error('Este código reservado não pode receber ocorrências.')
+      }
 
       const escalado = (escalas ?? []).some((e) =>
         codigosEscalados(e, form.papel).includes(codigo),
@@ -115,6 +120,7 @@ export function useSalvarAusencia(dataIso: string) {
         .eq('codigo', codigo)
         .maybeSingle()
       if (erroExistente) throw new Error(erroExistente.message)
+      if (existente) throw new Error('Este colaborador já possui um lançamento nesta data.')
 
       const registro = {
         nome: colaborador.nome,
@@ -123,17 +129,15 @@ export function useSalvarAusencia(dataIso: string) {
         justificativa: form.justificativa.trim(),
       }
 
-      if (existente) {
-        const { error } = await db.from('ausencias').update(registro).eq('id', existente.id)
-        if (error) throw new Error(error.message)
-      } else {
-        const { error } = await db.from('ausencias').insert({
-          data: dataIso,
-          papel: form.papel,
-          codigo,
-          ...registro,
-        })
-        if (error) throw new Error(error.message)
+      const { error } = await db.from('ausencias').insert({
+        data: dataIso,
+        papel: form.papel,
+        codigo,
+        ...registro,
+      })
+      if (error) {
+        if (error.code === '23505') throw new Error('Este colaborador já possui um lançamento nesta data.')
+        throw new Error(error.message)
       }
     },
     onSuccess: () => {

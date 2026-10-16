@@ -305,7 +305,7 @@ function ConteudoAusencias({ dataIso, definirData }: { dataIso: string; definirD
                 <div className="min-w-0 flex-1">
                   <div className="truncate text-sm font-semibold">{p.nome}</div>
                   <div className="truncate text-xs text-muted-foreground">
-                    {p.status || 'Disponível'}
+                    {(registros ?? []).find((r) => r.papel === papel && code(r.codigo) === code(p.codigo))?.tipo ?? (p.status || 'Disponível')}
                     {p.sala ? ` · ${p.sala}` : ''}
                   </div>
                 </div>

@@ -80,6 +80,7 @@ export function useGarantirEscala(dataIso: string) {
     },
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['escalas', dataIso] })
+      void qc.invalidateQueries({ queryKey: ['ausencias'] })
     },
     onError: (e) => toast.error(`Falha ao salvar a escala: ${e.message}`),
   })

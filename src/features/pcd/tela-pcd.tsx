@@ -191,7 +191,7 @@ export function TelaPcd() {
                 <TableHead className="text-right">Entregas</TableHead>
                 <TableHead className="text-right">TT CX</TableHead>
                 <TableHead className="text-right">Peso</TableHead>
-                <TableHead className="text-right">Ocup. peso</TableHead>
+                <TableHead className="text-right">Ocup. caixas</TableHead>
                 <TableHead>Carga</TableHead>
                 <TableHead>Região</TableHead>
                 <TableHead>Clientes</TableHead>
@@ -303,7 +303,7 @@ export function TelaPcd() {
                       {m.total_peso != null ? `${Math.round(m.total_peso)}` : '—'}
                     </TableCell>
                     <TableCell className="text-right tabular-nums">
-                      {m.ocupacao_peso_pct != null ? `${Math.round(m.ocupacao_peso_pct)}%` : '—'}
+                      {m.ocupacao_caixas_pct != null ? `${Math.round(m.ocupacao_caixas_pct)}%` : '—'}
                     </TableCell>
                     <TableCell className="whitespace-nowrap">{m.carga || '—'}</TableCell>
                     <TableCell className="max-w-40 truncate" title={m.cidades || ''}>

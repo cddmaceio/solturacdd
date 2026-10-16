@@ -30,7 +30,7 @@ import type { PapelEquipe } from '@/types/dominio'
 
 const TR_CRITICO_MIN = 9 * 60 + 10
 const TR_CRITICO_MAX = 9 * 60 + 25
-const LIMITE_OCUPACAO_PESO = 90
+const LIMITE_OCUPACAO_CAIXAS = 90
 const LIMITE_ENTREGAS = 20
 
 function motivosCriticos(v: VeiculoEscala): { stats: EstatisticasVeiculo; motivos: string[] } {
@@ -39,7 +39,7 @@ function motivosCriticos(v: VeiculoEscala): { stats: EstatisticasVeiculo; motivo
   const trNaFaixa = stats.tempoMinutos >= TR_CRITICO_MIN && stats.tempoMinutos <= TR_CRITICO_MAX
   if (!trNaFaixa) return { stats, motivos }
   if (stats.entregas >= LIMITE_ENTREGAS) motivos.push(`${stats.entregas} entregas`)
-  if (stats.ocupacaoPeso >= LIMITE_OCUPACAO_PESO) motivos.push(`Ocupação ${Math.round(stats.ocupacaoPeso)}%`)
+  if (stats.ocupacaoCaixas >= LIMITE_OCUPACAO_CAIXAS) motivos.push(`Ocupação caixas ${Math.round(stats.ocupacaoCaixas)}%`)
   return { stats, motivos }
 }
 
@@ -160,7 +160,7 @@ export function TelaIndicadores() {
       'Fidelização Ajudante',
       'KM',
       'Entregas',
-      'Ocupação Peso %',
+      'Ocupação Caixas %',
       'Tempo Previsto',
       'Rota',
       'Observação',
@@ -194,7 +194,7 @@ export function TelaIndicadores() {
         fidelidade(v, 'ajudante'),
         stats.km,
         stats.entregas,
-        stats.ocupacaoPeso,
+        stats.ocupacaoCaixas,
         stats.tempoRotulo,
         v.rotas.map((r) => r.regiao).join(' | '),
         v.observacao || '',
@@ -282,7 +282,7 @@ export function TelaIndicadores() {
           <strong className="text-sm">Veículos críticos do dia</strong>
           <span className="text-xs text-muted-foreground">
             {criticos.length} veículo(s) · TR 09:10–09:25 com ≥{LIMITE_ENTREGAS} entregas ou
-            {' '}≥{LIMITE_OCUPACAO_PESO}% ocupação · TR fora da faixa = LD/pernoite
+            {' '}≥{LIMITE_OCUPACAO_CAIXAS}% ocupação em caixas · TR fora da faixa = LD/pernoite
           </span>
         </div>
         {criticos.length === 0 ? (
@@ -312,11 +312,11 @@ export function TelaIndicadores() {
                       </b>
                     </div>
                     <div>
-                      <div className="text-[10px] text-muted-foreground">Ocupação</div>
+                      <div className="text-[10px] text-muted-foreground">Ocupação caixas</div>
                       <b
-                        className={`text-sm tabular-nums ${stats.ocupacaoPeso >= LIMITE_OCUPACAO_PESO ? 'text-rose-700' : 'text-foreground'}`}
+                        className={`text-sm tabular-nums ${stats.ocupacaoCaixas >= LIMITE_OCUPACAO_CAIXAS ? 'text-rose-700' : 'text-foreground'}`}
                       >
-                        {Math.round(stats.ocupacaoPeso)}%
+                        {Math.round(stats.ocupacaoCaixas)}%
                       </b>
                     </div>
                     <div>

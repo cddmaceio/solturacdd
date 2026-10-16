@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   compararVeiculos,
+  ehMapaCritico,
   fidelidade,
   montarEscala,
   normalizarAlocacoes,
@@ -10,6 +11,18 @@ import {
 import type { Colaborador, EquipeComPessoas, EscalaLinha, PcdMapa, Veiculo } from '@/types/dominio'
 
 const DATA = '2026-09-26'
+
+it.each([
+  [95, 50, '09:10', true],
+  [50, 95, '09:10', false],
+  [90, 95, '09:10', false],
+  [95, 50, '09:00', false],
+  [null, 95, '09:10', false],
+])('avalia mapa crítico pela ocupação em caixas (%s), peso (%s) e TR (%s)', (caixas, peso, tempo, esperado) => {
+  expect(ehMapaCritico(mapa('ABC1234', {
+    ocupacao_caixas_pct: caixas, ocupacao_peso_pct: peso, tempo_previsto: tempo,
+  }))).toBe(esperado)
+})
 
 function pessoa(codigo: string, tipo: 'motorista' | 'ajudante', nome = `Pessoa ${codigo}`, sala: string | null = null): Colaborador {
   return { id: `id-${tipo}-${codigo}`, codigo, nome, tipo, sala, status: 'Disponivel', ativo: true }

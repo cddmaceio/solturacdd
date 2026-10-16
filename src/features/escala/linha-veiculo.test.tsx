@@ -25,6 +25,9 @@ describe('linha da escala', () => {
       nomeDe={() => 'NELSON'} statusDe={() => ''} podeEditar
       onAbrirModal={abrir} onGrupo={vi.fn()} onObservacao={vi.fn()} onRestaurar={vi.fn()} /></DndContext>)
     expect(container.querySelector('[data-destaque="pernoite"]')).toHaveClass('bg-yellow-100')
+    expect(screen.getByText('57%')).toBeInTheDocument()
+    expect(screen.getByText('ocup. caixas')).toBeInTheDocument()
+    expect(screen.queryByText('53%')).not.toBeInTheDocument()
     expect(screen.getByText('Ajudante')).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: /Recolher campo do ajudante/ }))
     expect(screen.queryByText('Ajudante')).not.toBeInTheDocument()

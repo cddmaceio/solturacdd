@@ -16,6 +16,8 @@ it('exporta mapa e equipe arquivados com destaque de pernoite após fechamento n
     await exportarEscalaExcel(inicial.dataIso, veiculos, () => 'NELSON')
     const aba = abaSpy.mock.results[0].value as ExcelJS.Worksheet
     const linha = aba.getRow(2)
+    expect(aba.getRow(1).getCell(22).value).toBe('Ocupação caixas %')
+    expect(linha.getCell(22).value).toBe(inicial.mapas[0].ocupacao_caixas_pct)
     expect(linha.getCell(4).value).toBe('UHJ6F39')
     expect(linha.getCell(6).value).toBe('574742')
     expect(linha.getCell(8).value).toBe('296')

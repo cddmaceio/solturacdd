@@ -1387,9 +1387,9 @@ export function LinhaVeiculo({
                     </span>
                     <span>
                       <b className="text-foreground">
-                        {r.ocupacao_peso_pct != null ? `${Math.round(r.ocupacao_peso_pct)}%` : '—'}
+                        {r.ocupacao_caixas_pct != null ? `${Math.round(r.ocupacao_caixas_pct)}%` : '—'}
                       </b>{' '}
-                      ocup. peso
+                      ocup. caixas
                     </span>
                     <span>
                       <b className="text-foreground">{r.tempo_previsto?.slice(0, 5) || '—'}</b> previsto

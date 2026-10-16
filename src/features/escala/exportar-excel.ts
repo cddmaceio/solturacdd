@@ -14,7 +14,7 @@ export async function exportarEscalaExcel(dataIso: string, veiculos: VeiculoEsca
     'Motorista código', 'Motorista', 'Ajudante código', 'Ajudante',
     'Ajudante 2 código', 'Ajudante 2', 'Chapa/PX código', 'Chapa/PX',
     'Motorista fixo', 'Ajudante referência', 'Fidelização frota',
-    'Fidelização ajudante', 'KM', 'Entregas', 'Ocupação peso %',
+    'Fidelização ajudante', 'KM', 'Entregas', 'Ocupação caixas %',
     'Tempo previsto', 'Região', 'Justificativa NOK',
   ]
   aba.addRow(cabecalhos)
@@ -38,7 +38,7 @@ export async function exportarEscalaExcel(dataIso: string, veiculos: VeiculoEsca
       v.base?.motorista_fixo_nome ?? '',
       v.ajudante_referencia_nome ?? pessoa('ajudante', v.ajudante_referencia),
       fidelidade(v, 'motorista'), fidelidade(v, 'ajudante'),
-      stats.km, stats.entregas, stats.ocupacaoPeso, stats.tempoRotulo,
+      stats.km, stats.entregas, stats.ocupacaoCaixas, stats.tempoRotulo,
       v.rotas.map((r) => r.regiao).filter(Boolean).join(' | '), v.observacao,
     ])
     const destaque = destaqueLinha(v, dataIso)

@@ -123,7 +123,7 @@ export function rotuloTempo(minutos: number): string {
 }
 
 export function ehMapaCritico(r: PcdMapa): boolean {
-  return brNum(r.ocupacao_peso_pct) > 90 && minutosTempo(r.tempo_previsto) > 9 * 60
+  return brNum(r.ocupacao_caixas_pct) > 90 && minutosTempo(r.tempo_previsto) > 9 * 60
 }
 
 export type EstatisticasVeiculo = {

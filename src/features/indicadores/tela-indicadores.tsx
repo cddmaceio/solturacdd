@@ -1,22 +1,12 @@
-﻿import { useMemo, useState } from 'react'
+﻿import { useMemo } from 'react'
 import { FileDown } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
 import { CabecalhoPagina } from '@/components/cabecalho-pagina'
 import { useAuth } from '@/features/autenticacao/auth-provider'
 import { useDataOperacao } from '@/hooks/use-data-operacao'
 import { useEscalaCompleta } from '@/features/escala/mutacoes'
 import {
-  disponibilidade,
   estatisticasVeiculo,
   fidelidade,
   rotuloTipoVeiculo,
@@ -27,6 +17,7 @@ import { code, norm } from '@/lib/texto'
 import { baixarCsv } from '@/lib/csv'
 import { paraDmy } from '@/lib/datas'
 import type { PapelEquipe } from '@/types/dominio'
+import { AnaliseFidelizacao } from './analise-fidelizacao'
 
 const TR_CRITICO_MIN = 9 * 60 + 10
 const TR_CRITICO_MAX = 9 * 60 + 25
@@ -48,7 +39,6 @@ export function TelaIndicadores() {
   const podeExportar = pode('exportacoes.gerar')
   const { dataIso } = useDataOperacao()
   const { dados, carregando, erro } = useEscalaCompleta(dataIso)
-  const [busca, setBusca] = useState('')
 
   const veiculos = useMemo(() => dados?.veiculos ?? [], [dados])
   const pessoas = useMemo(() => dados?.pessoas ?? [], [dados])
@@ -107,34 +97,6 @@ export function TelaIndicadores() {
         ),
     [veiculos],
   )
-
-  const alertas = useMemo(() => {
-    const saida: { v: (typeof veiculos)[number]; lista: string[] }[] = []
-    for (const v of veiculos) {
-      const statusD = pessoas.find(
-        (p) => p.tipo === 'motorista' && code(p.codigo) === code(v.motorista_codigo),
-      )?.status
-      const statusH = pessoas.find(
-        (p) => p.tipo === 'ajudante' && code(p.codigo) === code(v.ajudante_codigo),
-      )?.status
-      const a: string[] = []
-      if (v.carregado && !code(v.motorista_codigo)) a.push('Motorista pendente')
-      if (v.carregado && fidelidade(v, 'motorista') === 'no') a.push('Fidelização Frota NOK')
-      if (v.carregado && fidelidade(v, 'ajudante') === 'no') a.push('Troca de ajudante')
-      if (v.temD1) a.push('Mapa D-1')
-      if (statusD) a.push(`Motorista: ${statusD}`)
-      if (statusH) a.push(`Ajudante: ${statusH}`)
-      if (disponibilidade(v) === 'UNAVAILABLE') a.push('Veículo indisponível na base')
-      const { stats: statsCrit, motivos } = motivosCriticos(v)
-      if (motivos.length) a.push(`Crítico: TR ${statsCrit.tempoRotulo} · ${motivos.join(' · ')}`)
-      if (a.length) saida.push({ v, lista: a })
-    }
-    const q = norm(busca)
-    if (!q) return saida
-    return saida.filter(({ v, lista }) =>
-      norm([v.placa, v.grupo, ...lista].join(' ')).includes(q),
-    )
-  }, [veiculos, pessoas, busca])
 
   function exportarCsv() {
     const cabecalho = [
@@ -216,16 +178,9 @@ export function TelaIndicadores() {
     <div>
       <CabecalhoPagina
         titulo="Indicadores"
-        descricao={`Distribuição da escala, qualidade das equipes e alertas operacionais · ${paraDmy(dataIso)}`}
+        descricao={`Distribuição da escala, qualidade das equipes e fidelização · ${paraDmy(dataIso)}`}
         acoes={
           <>
-            <Input
-              value={busca}
-              onChange={(e) => setBusca(e.target.value)}
-              placeholder="Filtrar alertas…"
-              className="h-9 w-56"
-              aria-label="Filtrar alertas"
-            />
             {podeExportar && (
               <Button variant="outline" size="sm" onClick={exportarCsv}>
                 <FileDown className="size-4" /> Exportar escala (CSV)
@@ -346,89 +301,7 @@ export function TelaIndicadores() {
         )}
       </div>
 
-      <div className="overflow-hidden rounded-xl border bg-card">
-        <div className="flex items-center justify-between border-b p-3">
-          <strong className="text-sm">Alertas operacionais</strong>
-          <span className="text-xs text-muted-foreground">
-            {alertas.length} veículo(s) com alerta
-          </span>
-        </div>
-        <div className="max-h-[calc(100dvh-540px)] min-h-40 overflow-auto">
-          <Table className="min-w-[1180px]">
-            <TableHeader>
-              <TableRow>
-                <TableHead className="whitespace-nowrap">Placa</TableHead>
-                <TableHead className="whitespace-nowrap">Sala</TableHead>
-                <TableHead className="whitespace-nowrap">Mapa(s)</TableHead>
-                <TableHead className="whitespace-nowrap">Motorista escala</TableHead>
-                <TableHead className="whitespace-nowrap">Motorista fixo</TableHead>
-                <TableHead className="whitespace-nowrap">Ajudante escala</TableHead>
-                <TableHead className="whitespace-nowrap">Ajudante fixo</TableHead>
-                <TableHead className="sticky right-0 z-20 min-w-56 border-l bg-card px-3 whitespace-nowrap">
-                  Alerta
-                </TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {alertas.length === 0 && (
-                <TableRow>
-                  <TableCell colSpan={8} className="h-16 text-center text-muted-foreground">
-                    Nenhum alerta para os filtros atuais.
-                  </TableCell>
-                </TableRow>
-              )}
-              {alertas.map(({ v, lista }) => (
-                <TableRow key={v.chave}>
-                  <TableCell className="font-semibold">{v.placa}</TableCell>
-                  <TableCell>{v.grupo}</TableCell>
-                  <TableCell className="max-w-40 truncate">
-                    {v.rotas
-                      .map((r) => `${r.mapa || '—'}${r.data_entrega !== dataIso ? ' D-1' : ''}`)
-                      .join(', ') || '—'}
-                  </TableCell>
-                  <TableCell>
-                    {v.motorista_codigo
-                      ? `${v.motorista_codigo} · ${nomeDe('motorista', v.motorista_codigo) || ''}`
-                      : '—'}
-                  </TableCell>
-                  <TableCell className="text-muted-foreground">
-                    {v.base?.motorista_fixo_codigo
-                      ? `${v.base.motorista_fixo_codigo} · ${v.base.motorista_fixo_nome ?? ''}`
-                      : '—'}
-                  </TableCell>
-                  <TableCell>
-                    {v.ajudante_codigo
-                      ? `${v.ajudante_codigo} · ${nomeDe('ajudante', v.ajudante_codigo) || ''}`
-                      : '—'}
-                  </TableCell>
-                  <TableCell className="text-muted-foreground">
-                    {v.ajudante_referencia
-                      ? `${v.ajudante_referencia} · ${nomeDe('ajudante', v.ajudante_referencia)}`
-                      : '—'}
-                  </TableCell>
-                  <TableCell className="sticky right-0 z-10 min-w-56 border-l bg-card px-3 whitespace-normal">
-                    <div className="flex flex-wrap gap-1">
-                      {lista.map((item) => (
-                        <Badge
-                          key={item}
-                          variant="outline"
-                          className={`whitespace-normal text-[10px] font-medium leading-tight ${
-                            item.startsWith('Crítico:')
-                              ? 'border-rose-200 bg-rose-50 text-rose-700'
-                              : 'border-amber-200 bg-amber-50 text-amber-800'
-                          }`}
-                        >
-                          {item}
-                        </Badge>
-                      ))}
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
-      </div>
+      <AnaliseFidelizacao dataIso={dataIso} veiculos={veiculos} />
     </div>
   )
 }

@@ -5,6 +5,13 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import {
   Table,
   TableBody,
   TableCell,
@@ -71,6 +78,7 @@ export function TelaPcd() {
   const importar = useImportarPcd()
 
   const [busca, setBusca] = useState('')
+  const [ordenacao, setOrdenacao] = useState('data')
   const inputArquivo = useRef<HTMLInputElement>(null)
 
   const visiveis = useMemo(() => mapasVisiveis(mapas ?? [], dataIso), [mapas, dataIso])
@@ -90,8 +98,14 @@ export function TelaPcd() {
           ).includes(q),
         )
       : visiveis
-    return [...filtrada].sort((a, b) => (b.data_entrega < a.data_entrega ? -1 : b.data_entrega > a.data_entrega ? 1 : a.mapa.localeCompare(b.mapa, 'pt-BR', { numeric: true })))
-  }, [visiveis, busca])
+    return [...filtrada].sort((a, b) => {
+      if (ordenacao !== 'data') {
+        const porStatus = rotuloFaseMpd(a.mpd).localeCompare(rotuloFaseMpd(b.mpd), 'pt-BR')
+        if (porStatus !== 0) return ordenacao === 'status-asc' ? porStatus : -porStatus
+      }
+      return b.data_entrega < a.data_entrega ? -1 : b.data_entrega > a.data_entrega ? 1 : a.mapa.localeCompare(b.mapa, 'pt-BR', { numeric: true })
+    })
+  }, [visiveis, busca, ordenacao])
 
   const totalEntregas = lista.reduce((s, m) => s + (m.entregas ?? 0), 0)
   const totalFreteiro = lista.filter(ehFreteiro).length
@@ -127,6 +141,16 @@ export function TelaPcd() {
               className="h-9 w-64"
               aria-label="Buscar mapas"
             />
+            <Select value={ordenacao} onValueChange={setOrdenacao}>
+              <SelectTrigger className="h-9 w-56" aria-label="Ordenar mapas">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="data">Ordenar por data</SelectItem>
+                <SelectItem value="status-asc">Status (A–Z)</SelectItem>
+                <SelectItem value="status-desc">Status (Z–A)</SelectItem>
+              </SelectContent>
+            </Select>
             {podeImportar && (
               <>
                 <input
@@ -183,7 +207,7 @@ export function TelaPcd() {
                 <TableHead>Mapa</TableHead>
                 <TableHead>TR (tempo em rota)</TableHead>
                 <TableHead>Situação</TableHead>
-                <TableHead>MPD</TableHead>
+                <TableHead>Status</TableHead>
                 <TableHead>Classificação</TableHead>
                 <TableHead>Placa</TableHead>
                 <TableHead>Veículo</TableHead>

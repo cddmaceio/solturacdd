@@ -10,6 +10,7 @@ export type Cliente = {
   cidade: string | null
   estado: string | null
   setor: string | null
+  bairro: string | null
   latitude: number | null
   longitude: number | null
   ultima_compra: string | null
@@ -60,7 +61,7 @@ export function parsearBase(texto: string, tipo: TipoBase) {
     registros.set(codigo, tipo === 'clientes' ? { codigo, nome } : {
       codigo, nome, codigo_roteirizador: code(original),
       endereco: ler(linha, 'Endereço'), cidade: ler(linha, 'Cidade'), estado: ler(linha, 'Estado'),
-      setor: ler(linha, 'Setor'), latitude: coordenada(ler(linha, 'Latitude'), 90),
+      setor: ler(linha, 'Setor'), bairro: ler(linha, 'Bairro') || null, latitude: coordenada(ler(linha, 'Latitude'), 90),
       longitude: coordenada(ler(linha, 'Longitude'), 180),
       ultima_compra: dataCompra(ler(linha, 'Data última compra')),
       penultima_compra: dataCompra(ler(linha, 'Data penúltima compra')),

@@ -29,6 +29,11 @@ describe('cruzamento de clientes', () => {
     const csv = csvRoteirizador.replace('Data penúltima compra\n', 'Data penúltima compra;Data antepenúltima compra\n') + ';01/09/2026'
     expect(parsearBase(csv, 'roteirizador').registros[0].antepenultima_compra).toBe('2026-09-01')
   })
+  it('importa bairro quando a coluna existe e não deduz bairro a partir do setor', () => {
+    expect(parsearBase(csvRoteirizador, 'roteirizador').registros[0].bairro).toBeNull()
+    const csv = csvRoteirizador.replace('Data penúltima compra\n', 'Data penúltima compra;Bairro\n') + ';Barro Duro'
+    expect(parsearBase(csv, 'roteirizador').registros[0].bairro).toBe('Barro Duro')
+  })
   it('rejeita arquivo da outra base, códigos vazios e datas inexistentes', () => {
     expect(() => parsearBase(csvRoteirizador, 'clientes')).toThrow('incompatível')
     expect(() => parsearBase('Cód. cliente;Nome fantasia\n;Mercado', 'clientes')).toThrow('não contém clientes')

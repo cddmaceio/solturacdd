@@ -4,7 +4,7 @@ import { DialogoMapaClientes } from './dialogo-mapa-clientes'
 import { montarEscala } from './montagem'
 import { entrada } from './fixtures-arquivo'
 
-vi.mock('@/features/clientes/api', () => ({ useClientes: () => ({
+vi.mock('@/features/clientes/api', () => ({ useClientesPorCodigos: () => ({
   data: [{ codigo: '42234', nome: 'Mercado Central', latitude: -9.6, longitude: -35.7 }, { codigo: '12', nome: 'Sem coordenadas', latitude: null, longitude: null }],
   isLoading: false, error: null,
 }) }))

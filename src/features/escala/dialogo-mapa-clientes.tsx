@@ -2,7 +2,8 @@ import { lazy, Suspense, useMemo, useState } from 'react'
 import { MapPin } from 'lucide-react'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
-import { useClientes } from '@/features/clientes/api'
+import { useClientesPorCodigos } from '@/features/clientes/api'
+import { codigosDoMapa } from '@/features/clientes/lib'
 import { paraDmy } from '@/lib/datas'
 import { clientesDoVeiculo } from './clientes-veiculo'
 import type { VeiculoEscala } from './montagem'
@@ -10,7 +11,8 @@ import type { VeiculoEscala } from './montagem'
 const MapaPontosClientes = lazy(() => import('./mapa-pontos-clientes'))
 
 export function DialogoMapaClientes({ veiculo, dataIso, onClose }: { veiculo: VeiculoEscala; dataIso: string; onClose: () => void }) {
-  const { data: clientes = [], isLoading, error, refetch } = useClientes()
+  const codigos = veiculo.rotas.flatMap((rota) => codigosDoMapa(rota.clientes))
+  const { data: clientes = [], isLoading, error, refetch } = useClientesPorCodigos(codigos)
   const [selecionado, setSelecionado] = useState<string | null>(null)
   const lista = useMemo(() => clientesDoVeiculo(veiculo.rotas, clientes), [veiculo.rotas, clientes])
   const pontos = useMemo(() => lista.filter((c) => c.localizado), [lista])

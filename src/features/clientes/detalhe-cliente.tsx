@@ -10,6 +10,7 @@ export function DetalheCliente({ cliente }: { cliente: Cliente }) {
   const campos = [
     ['Endereço', [cliente.endereco, cliente.cidade, cliente.estado].filter(Boolean).join(' · ')],
     ['Setor', cliente.setor],
+    ['Bairro', cliente.bairro],
     ['Última compra', cliente.ultima_compra ? paraDmy(cliente.ultima_compra) : null],
     ['Penúltima compra', cliente.penultima_compra ? paraDmy(cliente.penultima_compra) : null],
     ['Antepenúltima compra', cliente.antepenultima_compra ? paraDmy(cliente.antepenultima_compra) : 'Não informada na base'],

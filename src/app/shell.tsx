@@ -26,6 +26,7 @@ const ITENS_NAV: ItemNav[] = [
   { para: '/equipes', rotulo: 'Base Equipes', permissao: 'bases.visualizar' },
   { para: '/ausencias', rotulo: 'Absenteísmo', permissao: 'ausencias.visualizar' },
   { para: '/pcd', rotulo: 'PCD', permissao: 'pcd.visualizar' },
+  { para: '/clientes', rotulo: 'Consulta Clientes', permissao: 'bases.visualizar' },
   { para: '/indicadores', rotulo: 'Indicadores', permissao: 'indicadores.visualizar' },
   { para: '/admin/usuarios', rotulo: 'Usuários', permissao: 'usuarios.gerenciar' },
 ]
@@ -56,7 +57,7 @@ export function AppShell() {
             <MarcaSoltura />
           </NavLink>
 
-          <nav className="order-3 -mx-1 flex w-full gap-1 overflow-x-auto pb-1 lg:order-none lg:w-auto lg:flex-1 lg:overflow-visible lg:pb-0">
+          <nav className="order-3 -mx-1 flex min-w-0 w-full gap-1 overflow-x-auto pb-1 lg:order-none lg:w-auto lg:flex-1 lg:pb-0">
             {ITENS_NAV.filter((item) => pode(item.permissao)).map((item) => (
               <NavLink
                 key={item.para}

@@ -36,12 +36,19 @@ export function separarCsv(texto: string, delimitador = ';'): string[][] {
   return linhas
 }
 
-/** Detecta encoding do arquivo (UTF-8 com marcador de substituição → Windows-1252). */
+/** UTF-8 válido pode conter o caractere � já gravado na origem. */
+export function decodificarCsv(buffer: ArrayBuffer | Uint8Array): string {
+  try {
+    return new TextDecoder('utf-8', { fatal: true }).decode(buffer)
+  } catch {
+    return new TextDecoder('windows-1252').decode(buffer)
+  }
+}
+
+/** Detecta UTF-8 pelos bytes; usa Windows-1252 apenas se forem inválidos. */
 export async function textoDoArquivo(arquivo: File): Promise<string> {
   const buffer = await arquivo.arrayBuffer()
-  const utf = new TextDecoder('utf-8').decode(buffer)
-  if (!utf.includes('\uFFFD') && !utf.includes('\u00EF\u00BF\u00BD')) return utf
-  return new TextDecoder('windows-1252').decode(buffer)
+  return decodificarCsv(buffer)
 }
 
 export type CabecalhosCsv = {

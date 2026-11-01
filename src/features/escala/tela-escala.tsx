@@ -19,6 +19,7 @@ import {
   CircleHelp,
   ClipboardList,
   FileDown,
+  Eye,
   Printer,
   RotateCcw,
   Search,
@@ -89,6 +90,7 @@ import {
 import { code, norm } from '@/lib/texto'
 import { dataHojeIso, difDiasIso, paraDmy } from '@/lib/datas'
 import type { Colaborador, PapelEquipe, PapelSlot } from '@/types/dominio'
+import { DialogoMapaClientes } from './dialogo-mapa-clientes'
 
 // ---------------------------------------------------------------------------
 // Drag & drop
@@ -268,6 +270,7 @@ export function TelaEscala() {
   const [mostrarOcupados, setMostrarOcupados] = useState(false)
   const [arrastoAtivo, setArrastoAtivo] = useState<CargaArrasto | null>(null)
   const [modal, setModal] = useState<{ placa: string; papel: PapelSlot } | null>(null)
+  const [mapaClientes, setMapaClientes] = useState<{ veiculo: VeiculoEscala; dataIso: string } | null>(null)
   const [buscaModal, setBuscaModal] = useState('')
   const [modoChapa, setModoChapa] = useState(false)
   const [chapaCodigo, setChapaCodigo] = useState('')
@@ -861,6 +864,7 @@ export function TelaEscala() {
                       pessoas.find((p) => p.tipo === papel && code(p.codigo) === code(codigo))?.status ?? ''
                     }
                     podeEditar={podeEditar}
+                    onVerMapa={() => setMapaClientes({ veiculo: v, dataIso })}
                     onAbrirModal={(papel) => abrirModal(v.chave, papel)}
                     onGrupo={(grupo) => atualizar.mutate({ placa: v.chave, patch: { grupo } })}
                     onObservacao={(observacao) => atualizar.mutate({ placa: v.chave, patch: { observacao } })}
@@ -980,6 +984,7 @@ export function TelaEscala() {
         </div>
 
         {/* Modal de seleção */}
+        {mapaClientes && <DialogoMapaClientes veiculo={mapaClientes.veiculo} dataIso={mapaClientes.dataIso} onClose={() => setMapaClientes(null)} />}
         <Dialog open={Boolean(modal)} onOpenChange={(aberto) => !aberto && setModal(null)}>
           <DialogContent className="max-h-[calc(100dvh-2rem)] w-full max-w-lg overflow-y-auto sm:max-w-lg">
             <DialogHeader>
@@ -1131,6 +1136,7 @@ export function LinhaVeiculo({
   onGrupo,
   onObservacao,
   onRestaurar,
+  onVerMapa,
 }: {
   v: VeiculoEscala
   dataIso: string
@@ -1142,6 +1148,7 @@ export function LinhaVeiculo({
   onGrupo: (grupo: string) => void
   onObservacao: (observacao: string) => void
   onRestaurar: () => void
+  onVerMapa?: () => void
 }) {
   const [equipeExpandida, setEquipeExpandida] = useState(
     () => Boolean(v.ajudante2_codigo || v.chapa_codigo || v.chapa_nome),
@@ -1311,7 +1318,14 @@ export function LinhaVeiculo({
     >
       {/* Veículo */}
       <div>
-        <div className="text-[13px] font-extrabold tracking-tight tabular-nums text-slate-900">{v.placa}</div>
+        <div className="flex items-center gap-1">
+          <div className="text-[13px] font-extrabold tracking-tight tabular-nums text-slate-900">{v.placa}</div>
+          {onVerMapa && <button type="button" onClick={onVerMapa}
+            title="Ver clientes no mapa" aria-label={`Ver clientes do veículo ${v.placa} no mapa`}
+            className="grid size-7 shrink-0 place-items-center rounded-md text-slate-400 transition-colors hover:bg-slate-200/60 hover:text-slate-700 focus-visible:outline-2 focus-visible:outline-primary print:hidden">
+            <Eye className="size-3.5" />
+          </button>}
+        </div>
         <div className="mt-0.5 text-[11px] text-muted-foreground">
           {v.isSpot ? 'Veículo spot' : v.base?.frota ? `Frota ${v.base.frota}` : 'Sem frota fixa'}
         </div>

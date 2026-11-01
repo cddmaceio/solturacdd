@@ -7,6 +7,17 @@ import { entrada, salvar } from './fixtures-arquivo'
 import { AreaImpressao } from './impressao'
 
 describe('linha da escala', () => {
+  it('abre o mapa do veículo pelo ícone de olho sem alterar a escala', () => {
+    const [v] = montarEscala(entrada())
+    const abrirMapa = vi.fn()
+    const editar = vi.fn()
+    render(<DndContext><LinhaVeiculo v={v} dataIso="2026-09-28" salas={['FORÇA']}
+      nomeDe={() => 'NELSON'} statusDe={() => ''} podeEditar={false}
+      onVerMapa={abrirMapa} onAbrirModal={editar} onGrupo={editar} onObservacao={editar} onRestaurar={editar} /></DndContext>)
+    fireEvent.click(screen.getByRole('button', { name: `Ver clientes do veículo ${v.placa} no mapa` }))
+    expect(abrirMapa).toHaveBeenCalledOnce()
+    expect(editar).not.toHaveBeenCalled()
+  })
   it('imprime o mesmo pernoite preservado após fechamento no PCD', () => {
     const inicial = entrada()
     const veiculos = montarEscala({ ...inicial, hojeIso: '2026-09-29', salvas: salvar(inicial),

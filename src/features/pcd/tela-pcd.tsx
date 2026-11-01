@@ -37,6 +37,8 @@ import {
 } from '@/features/pcd/lib'
 import { norm } from '@/lib/texto'
 import { paraDmy } from '@/lib/datas'
+import { DialogoClientesMapa } from '@/features/clientes/dialogo-clientes-mapa'
+import { codigosDoMapa } from '@/features/clientes/lib'
 
 function badgeDias(mapa: { data_entrega: string }, dataSelecionadaIso: string) {
   const [aaaammdd, iso] = [
@@ -78,6 +80,7 @@ export function TelaPcd() {
   const importar = useImportarPcd()
 
   const [busca, setBusca] = useState('')
+  const [mapaClientes, setMapaClientes] = useState<{ mapa: string; clientes: string | null } | null>(null)
   const [ordenacao, setOrdenacao] = useState('data')
   const inputArquivo = useRef<HTMLInputElement>(null)
 
@@ -333,8 +336,10 @@ export function TelaPcd() {
                     <TableCell className="max-w-40 truncate" title={m.cidades || ''}>
                       {m.regiao || '—'}
                     </TableCell>
-                    <TableCell className="max-w-48 truncate" title={m.clientes || ''}>
-                      {m.clientes || '—'}
+                    <TableCell>
+                      {m.clientes ? <button type="button" className="whitespace-nowrap font-medium text-primary underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-primary" onClick={() => setMapaClientes(m)} aria-label={`Ver clientes do mapa ${m.mapa}`}>
+                        {codigosDoMapa(m.clientes).length} cliente(s) · Ver nomes
+                      </button> : '—'}
                     </TableCell>
                   </TableRow>
                 )
@@ -343,6 +348,7 @@ export function TelaPcd() {
           </Table>
         </div>
       </div>
+      <DialogoClientesMapa mapa={mapaClientes} onClose={() => setMapaClientes(null)} podeConsultar={pode('bases.visualizar')} />
     </div>
   )
 }

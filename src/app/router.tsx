@@ -8,6 +8,7 @@ import { TelaVeiculos } from '@/features/veiculos/tela-veiculos'
 import { TelaEquipes } from '@/features/equipes/tela-equipes'
 import { TelaAusencias } from '@/features/ausencias/tela-ausencias'
 import { TelaPcd } from '@/features/pcd/tela-pcd'
+import { TelaClientes } from '@/features/clientes/tela-clientes'
 import { TelaIndicadores } from '@/features/indicadores/tela-indicadores'
 import { TelaUsuarios } from '@/features/administracao/tela-usuarios'
 
@@ -63,6 +64,7 @@ export function AppRouter() {
             </Guard>
           }
         />
+        <Route path="clientes" element={<Guard permissao="bases.visualizar"><TelaClientes /></Guard>} />
         <Route
           path="pcd"
           element={

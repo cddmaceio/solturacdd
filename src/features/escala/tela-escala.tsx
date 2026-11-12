@@ -56,6 +56,7 @@ import { useAuth } from '@/features/autenticacao/auth-provider'
 import { exportarEscalaExcel } from '@/features/escala/exportar-excel'
 import { useDataOperacao } from '@/hooks/use-data-operacao'
 import { useAusencias } from '@/features/ausencias/api'
+import { colaboradorDisponivel } from '@/features/equipes/disponibilidade'
 import { opcoesSala } from '@/features/escala/montagem'
 import {
   useEscalaCompleta,
@@ -370,10 +371,7 @@ export function TelaEscala() {
   const pessoasDoPapel = (papel: PapelEquipe): Colaborador[] =>
     pessoas.filter((p) => p.tipo === papel && !(papel === 'ajudante' && ['800', '801'].includes(code(p.codigo))))
 
-  const disponivelNaBase = (p: Colaborador): boolean => {
-    const n = norm(p.status)
-    return !n || n.includes('DISPON')
-  }
+  const disponivelNaBase = colaboradorDisponivel
 
   // ------------------------------------------------------------------ KPIs
   const kpis = useMemo(() => {

@@ -68,6 +68,27 @@ await db.exec(`update ausencias
 assert.equal((await db.query(`select count(*)::int as n from ausencias
   where codigo in ('10','20') and data = (now() at time zone 'America/Maceio')::date`)).rows[0].n, 0)
 assert.equal((await db.query("select count(*)::int as n from ausencias where codigo in ('10','20') and tipo='Férias'")).rows[0].n, 2)
+// Apply the return fix with stale automatic absences from an earlier return.
+await db.exec(`update colaboradores set status='Férias' where codigo in ('10','20');
+  update escalas set observacao='Antes do retorno' where veiculo_placa='ABC1234';
+  update colaboradores set status='Ativo' where codigo in ('10','20');`)
+await db.exec(await readFile(new URL('../supabase/migrations/20261112120000_liberar_retorno_ferias.sql', import.meta.url), 'utf8'))
+assert.equal((await db.query(`select count(*)::int as n from ausencias
+  where codigo in ('10','20') and data = (now() at time zone 'America/Maceio')::date`)).rows[0].n, 0)
+assert.equal((await db.query("select count(*)::int as n from ausencias where codigo in ('10','20')")).rows[0].n, 2)
+// Both roles return on the same day, keeping past vacations and manual entries.
+await db.exec(`update colaboradores set status='Férias' where codigo in ('10','20');
+  update escalas set observacao='Novo período' where veiculo_placa='ABC1234';
+  insert into colaboradores(codigo,nome,tipo,status) values ('61','Férias manuais','ajudante','Férias');
+  insert into ausencias(data,papel,codigo,colaborador_id,tipo,justificativa,status_base)
+    select (now() at time zone 'America/Maceio')::date,tipo::text,codigo,id,'Férias','Lançamento manual','Férias'
+    from colaboradores where codigo='61';
+  update colaboradores set status='Ativo' where codigo in ('10','20','60','61');
+  update escalas set observacao='Após retorno' where veiculo_placa='ABC1234';`)
+assert.equal((await db.query(`select count(*)::int as n from ausencias
+  where codigo in ('10','20') and data = (now() at time zone 'America/Maceio')::date`)).rows[0].n, 0)
+assert.equal((await db.query("select count(*)::int as n from ausencias where codigo in ('10','20')")).rows[0].n, 2)
+assert.equal((await db.query("select count(*)::int as n from ausencias where codigo in ('60','61')")).rows[0].n, 2)
 // A failure rolls back scale and automatic absences together.
 await db.exec("insert into colaboradores(codigo,nome,tipo,status) values ('70','Novo','motorista','Férias')")
 await assert.rejects(db.exec(`begin;

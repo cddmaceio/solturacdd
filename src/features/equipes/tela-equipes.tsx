@@ -31,12 +31,13 @@ import {
   useImportarEquipes,
 } from '@/features/equipes/api'
 import { DialogoEquipe } from '@/features/equipes/dialogo-equipe'
+import { statusDisponivel } from '@/features/equipes/disponibilidade'
 import { norm } from '@/lib/texto'
 import type { EquipeComPessoas } from '@/types/dominio'
 
 function situacaoStatus(status: string | undefined): 'ok' | 'aviso' | 'ruim' {
   const n = norm(status)
-  if (!n || n.includes('DISPON')) return 'ok'
+  if (statusDisponivel(status)) return 'ok'
   if (n.includes('FERIA') || n.includes('INSS')) return 'aviso'
   return 'ruim'
 }

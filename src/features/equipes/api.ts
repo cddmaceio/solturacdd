@@ -202,6 +202,7 @@ export function useSalvarEquipe() {
       void qc.invalidateQueries({ queryKey: ['equipes'] })
       void qc.invalidateQueries({ queryKey: ['colaboradores'] })
       void qc.invalidateQueries({ queryKey: ['escalas'] })
+      void qc.invalidateQueries({ queryKey: ['ausencias'] })
     },
   })
 }

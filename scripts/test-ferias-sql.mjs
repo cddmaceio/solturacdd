@@ -89,6 +89,28 @@ assert.equal((await db.query(`select count(*)::int as n from ausencias
   where codigo in ('10','20') and data = (now() at time zone 'America/Maceio')::date`)).rows[0].n, 0)
 assert.equal((await db.query("select count(*)::int as n from ausencias where codigo in ('10','20')")).rows[0].n, 2)
 assert.equal((await db.query("select count(*)::int as n from ausencias where codigo in ('60','61')")).rows[0].n, 2)
+// Reimporting the base can orphan automatic absences (ON DELETE SET NULL).
+await db.exec(`update colaboradores set status='Férias' where codigo in ('10','20');
+  update escalas set observacao='Reimportação' where veiculo_placa='ABC1234';`)
+await db.exec(`update ausencias set colaborador_id=null where codigo in ('10','20','61');
+  update colaboradores set status='Disponivel' where codigo in ('10','20');`)
+assert.equal((await db.query(`select count(*)::int as n from ausencias
+  where codigo in ('10','20') and data=(now() at time zone 'America/Maceio')::date`)).rows[0].n, 2)
+await db.exec(await readFile(new URL('../supabase/migrations/20261112130000_liberar_ferias_sem_vinculo.sql', import.meta.url), 'utf8'))
+assert.equal((await db.query(`select count(*)::int as n from ausencias
+  where codigo in ('10','20') and data=(now() at time zone 'America/Maceio')::date`)).rows[0].n, 0)
+assert.equal((await db.query("select count(*)::int as n from ausencias where codigo in ('10','20')")).rows[0].n, 2)
+assert.equal((await db.query("select count(*)::int as n from ausencias where codigo='61'")).rows[0].n, 1)
+// Future status changes also release orphaned daily records for both roles.
+await db.exec(`update colaboradores set status='Férias' where codigo in ('10','20');
+  update escalas set observacao='Outro retorno' where veiculo_placa='ABC1234';`)
+assert.equal((await db.query(`select count(*)::int as n from ausencias
+  where codigo in ('10','20') and data=(now() at time zone 'America/Maceio')::date`)).rows[0].n, 2)
+await db.exec(`update ausencias set colaborador_id=null where codigo in ('10','20');
+  update colaboradores set status='Ativo' where codigo in ('10','20');`)
+assert.equal((await db.query(`select count(*)::int as n from ausencias
+  where codigo in ('10','20') and data=(now() at time zone 'America/Maceio')::date`)).rows[0].n, 0)
+assert.equal((await db.query("select count(*)::int as n from ausencias where codigo in ('10','20')")).rows[0].n, 2)
 // A failure rolls back scale and automatic absences together.
 await db.exec("insert into colaboradores(codigo,nome,tipo,status) values ('70','Novo','motorista','Férias')")
 await assert.rejects(db.exec(`begin;
